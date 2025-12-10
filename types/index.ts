@@ -85,6 +85,13 @@ export interface User {
   toursCreated: number;
   toursRemaining: number;
   profile?: UserProfile;
+  hasCompletedOnboarding?: boolean;
+  onboarding?: {
+    onTrip: boolean | null;
+    bookedTours: boolean | null;
+    painPoint: string;
+    referralCode: string;
+  };
 }
 
 export interface UserProfile {

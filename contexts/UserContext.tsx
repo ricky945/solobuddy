@@ -11,6 +11,7 @@ const defaultUser: User = {
   subscriptionTier: "free",
   toursCreated: 0,
   toursRemaining: 2,
+  hasCompletedOnboarding: false,
 };
 
 const [UserProvider, useUser] = createContextHook(() => {

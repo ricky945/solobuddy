@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -30,6 +30,8 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="splash" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="route-navigation" options={{ headerShown: false, presentation: "card" }} />
     </Stack>
@@ -37,9 +39,10 @@ function RootLayoutNav() {
 }
 
 function AppContent() {
-  const { isLoading: userLoading } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const { isLoading: toursLoading } = useTours();
   const [isReady, setIsReady] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (!userLoading && !toursLoading && !isReady) {
@@ -47,6 +50,16 @@ function AppContent() {
       SplashScreen.hideAsync();
     }
   }, [userLoading, toursLoading, isReady]);
+
+  useEffect(() => {
+    if (isReady) {
+      if (!user.hasCompletedOnboarding) {
+        router.replace("/splash");
+      } else {
+        router.replace("/(tabs)");
+      }
+    }
+  }, [isReady, user.hasCompletedOnboarding, router]);
 
   if (!isReady) {
     return (
