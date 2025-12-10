@@ -95,7 +95,8 @@ export default function ExploreScreen() {
       enabled: !!location,
       refetchOnWindowFocus: false,
       refetchOnMount: true,
-      retry: 1,
+      retry: 0,
+      retryDelay: 0,
     }
   );
   
@@ -105,7 +106,8 @@ export default function ExploreScreen() {
       enabled: !!queryInput,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      retry: 1,
+      retry: 0,
+      retryDelay: 0,
     }
   );
 
