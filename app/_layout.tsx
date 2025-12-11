@@ -9,6 +9,7 @@ import { UserProvider, useUser } from "@/contexts/UserContext";
 import { ToursProvider, useTours } from "@/contexts/ToursContext";
 import { trpc, trpcClient } from "@/lib/trpc";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -75,17 +76,19 @@ function AppContent() {
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <UserProvider>
-              <ToursProvider>
-                <AppContent />
-              </ToursProvider>
-            </UserProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
-      </trpc.Provider>
+      <SafeAreaProvider>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <UserProvider>
+                <ToursProvider>
+                  <AppContent />
+                </ToursProvider>
+              </UserProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </trpc.Provider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
