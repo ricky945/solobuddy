@@ -14,7 +14,7 @@ const defaultUser: User = {
   hasCompletedOnboarding: false,
 };
 
-const [UserProvider, useUser] = createContextHook(() => {
+export const [UserProvider, useUser] = createContextHook(() => {
   const queryClient = useQueryClient();
 
   const userQuery = useQuery({
@@ -82,5 +82,3 @@ const [UserProvider, useUser] = createContextHook(() => {
     updateUser: updateUserMutation.mutate,
   };
 });
-
-export { UserProvider, useUser };

@@ -7,7 +7,7 @@ import { mockAudioGuides } from "@/mocks/tours";
 
 const STORAGE_KEY = "@solobuddy:tours";
 
-const [ToursProvider, useTours] = createContextHook(() => {
+export const [ToursProvider, useTours] = createContextHook(() => {
   const queryClient = useQueryClient();
 
   const toursQuery = useQuery({
@@ -148,5 +148,3 @@ const [ToursProvider, useTours] = createContextHook(() => {
     clearAllTours,
   };
 });
-
-export { ToursProvider, useTours };
