@@ -57,6 +57,35 @@ export default function RouteNavigationScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
+  const toRad = (value: number) => {
+    return (value * Math.PI) / 180;
+  };
+
+  const calculateDistance = React.useCallback((lat: number, lon: number) => {
+    if (!tour || !tour.landmarks || !tour.landmarks[currentLandmarkIndex]) return;
+
+    const landmark = tour.landmarks[currentLandmarkIndex];
+    const R = 6371;
+    const dLat = toRad(landmark.coordinates.latitude - lat);
+    const dLon = toRad(landmark.coordinates.longitude - lon);
+    
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat)) *
+        Math.cos(toRad(landmark.coordinates.latitude)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    if (distance < 1) {
+      setDistanceToLandmark(`${Math.round(distance * 1000)}m away`);
+    } else {
+      setDistanceToLandmark(`${distance.toFixed(1)}km away`);
+    }
+  }, [tour, currentLandmarkIndex]);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -70,7 +99,7 @@ export default function RouteNavigationScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [currentLandmarkIndex]);
+  }, [currentLandmarkIndex, fadeAnim, slideAnim]);
 
   useEffect(() => {
     const setupAudio = async () => {
@@ -138,7 +167,7 @@ export default function RouteNavigationScreen() {
         locationSubscription.remove();
       }
     };
-  }, [currentLandmarkIndex]);
+  }, [currentLandmarkIndex, calculateDistance]);
 
   useEffect(() => {
     return () => {
@@ -154,35 +183,6 @@ export default function RouteNavigationScreen() {
       }
     };
   }, [sound, recording]);
-
-  const calculateDistance = (lat: number, lon: number) => {
-    if (!tour || !tour.landmarks || !tour.landmarks[currentLandmarkIndex]) return;
-
-    const landmark = tour.landmarks[currentLandmarkIndex];
-    const R = 6371;
-    const dLat = toRad(landmark.coordinates.latitude - lat);
-    const dLon = toRad(landmark.coordinates.longitude - lon);
-    
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat)) *
-        Math.cos(toRad(landmark.coordinates.latitude)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-
-    if (distance < 1) {
-      setDistanceToLandmark(`${Math.round(distance * 1000)}m away`);
-    } else {
-      setDistanceToLandmark(`${distance.toFixed(1)}km away`);
-    }
-  };
-
-  const toRad = (value: number) => {
-    return (value * Math.PI) / 180;
-  };
 
   const handlePlayAudio = async () => {
     if (!tour || !tour.audioUrl) {

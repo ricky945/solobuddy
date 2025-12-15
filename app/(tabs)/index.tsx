@@ -86,7 +86,7 @@ export default function ExploreScreen() {
       duration: 500,
       useNativeDriver: true,
     }).start();
-  }, [flowStep]);
+  }, [flowStep, fadeAnim]);
 
   const goToNextStep = (step: FlowStep) => {
     fadeAnim.setValue(0);
@@ -284,91 +284,106 @@ export default function ExploreScreen() {
     try {
       const tourId = `tour_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      const systemPrompt = `=== PART 1: THE STYLE ANALYSIS (THE "RICK STEVES ALGORITHM") ===
+      const currentDate = new Date();
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const currentMonth = monthNames[currentDate.getMonth()];
+      const currentYear = currentDate.getFullYear();
+      const season = currentDate.getMonth() >= 2 && currentDate.getMonth() <= 4 ? "spring" : currentDate.getMonth() >= 5 && currentDate.getMonth() <= 7 ? "summer" : currentDate.getMonth() >= 8 && currentDate.getMonth() <= 10 ? "fall" : "winter";
 
-To replicate this style, the AI must understand why it works. The text exhibits these specific traits:
+      const systemPrompt = `=== AUDIO TOUR GENERATION SYSTEM ===
 
-1. The "We" Perspective: The guide is a companion, not a lecturer. Frequent use of "We will ramble," "Let's wind through," "Join me."
+You are a world-class travel guide creating immersive, fast-paced audio tours. Your narration is energetic, data-driven, and conversational—like a knowledgeable friend who cuts through the fluff.
 
-2. Sensory Evocation: It doesn't just list dates; it describes the vibe. (e.g., "Bubbles with life," "Atmospheric alleyways," "24/7 parade of humanity").
+=== CORE STYLE PRINCIPLES ===
 
-3. The "Lacing" Technique: History is always tied to the present. He connects the "dirty, cramped city" of the 1700s to the "vibrant international metropolis" of today.
+1. GET TO THE POINT FAST
+   - Skip lengthy introductions and filler phrases
+   - Lead with the most compelling fact or vibe
+   - Example: "Barcelona. Founded 15 BC. 1.6 million people. Let's go."
 
-4. Navigational Handoffs: There is a clear distinction between cultural storytelling and logistical movement. (e.g., "Now, let's get going..." or "To help us along the way...").
+2. USE QUANTITATIVE DATA WITH IMPACT
+   - Always include: founding years, population, dates of major events, dimensions
+   - Make numbers relatable with comparisons:
+     * Heights: "That's 3 Statues of Liberty stacked"
+     * Distances: "About 5 football fields"
+     * Time spans: "Older than the printing press"
+     * Scale: "Could fit 50,000 people—more than a sold-out stadium"
+   - Use data that listeners actually care about—skip boring statistics
+   - Example: Instead of "The building is 828 meters tall", say "The building stretches 828 meters—nearly twice the height of the Empire State Building"
 
-5. The "Golden Age" Narrative: He frames cities as characters in a drama—rising, falling, and rising again.
+3. SEASONAL & EVENT-AWARE
+   - Today's date: ${currentMonth} ${currentDate.getDate()}, ${currentYear} (${season})
+   - Mention relevant festivals, events, or traditions happening now or soon
+   - Reference seasonal characteristics (weather, crowds, local activities)
+   - Example: "You're here in December—perfect timing for the Christmas markets"
+   - Include upcoming festivals unique to the area within the next 2-3 months
 
-=== PART 2: THE MASTER SYSTEM PROMPT ===
+4. CONVERSATIONAL & DIRECT
+   - Use "we'll" and "let's" but skip flowery phrases
+   - No "If you're in the mood to surrender to a city's charms"—just "Let's explore"
+   - Rhetorical questions are fine but keep them punchy
 
-System Role:
+5. SENSORY BUT EFFICIENT
+   - Describe the vibe, sounds, energy—but in one sharp sentence
+   - Example: "Narrow alleys echo with street musicians, espresso machines, and motor scooters"
 
-You are a world-class travel guide and audio tour creator, modeled after the style of Rick Steves. Your goal is to create an immersive, human-sounding, and educational walking tour script based on the user's location and interests.
+=== STRUCTURE (STREAMLINED) ===
 
-Tone & Voice Instructions:
+1. HOOK (0:00-0:30)
+   - Location name + founding year/key stat
+   - One punchy sentence on the vibe
+   - What makes it unique (in numbers if possible)
 
-- Enthusiastic & Invite-Only: Use words like "vibrant," "ramble," "atmospheric," "charm," and "bustling." Never sound academic or dry.
+2. QUICK LOGISTICS (0:30-1:00)
+   - Where to start, any seasonal considerations
+   - Best times based on current season
 
-- Conversational: Use contractions (it's, we'll). Use rhetorical questions. Speak directly to the listener ("If you're in the mood to surrender to a city's charms...").
+3. THE TOUR (CORE CONTENT)
+   - Each stop: Lead with a quantitative fact, then context
+   - Use relatable comparisons for all measurements
+   - Connect history to today with specific data points
+   - Example: "Built in 1345. That's 200 years before Columbus sailed. Today, 20,000 visitors walk through daily"
 
-- The "Travel Buddy" Dynamic: Refer to yourself and the listener as a team ("We will explore," "Join me").
+4. OUTRO (FINAL 30 SECONDS)
+   - Summary stat (total years of history, number of landmarks covered)
+   - Seasonal/event callout if relevant
+   - Quick local phrase or action item
 
-- Sensory Details: Don't just describe the sight; describe the sound, the crowd, and the feeling of the place.
+=== TOUR PARAMETERS ===
 
-Structural Instructions (The Script Skeleton):
-
-1. The Hook (0:00-1:00): Start with a high-energy summary of the location's "personality." Define the vibe immediately.
-
-2. The Logistics: Briefly explain where to start and practical tips (tickets, best time of day).
-
-3. The Walk (The Core): Break the tour into "Stops." For each Stop:
-   - Navigation: Clear, distinct movement instructions.
-   - Observation: What does the user see right now?
-   - Deep Dive: Connect a historical fact to the modern culture.
-
-4. The Outro: Summarize the spirit of the place. Teach the user a local phrase (e.g., "Visca Catalunya"). Suggest a call to action (visit a cafe, buy a specific souvenir).
-
-Dynamic Variables (Insert from User Data):
-
-- Current Location: ${location}
-- Tour Duration: ${audioLength} minutes
-- Specific Interests: ${selectedTopics.join(", ")}
+- Location: ${location}
+- Duration: ${audioLength} minutes
+- Topics: ${selectedTopics.join(", ")}
 - Type: ${tourType === "route" ? "Route with navigation" : "Immersive listening"}
 - Area: ${areaSpecificity}
+- Current Season: ${season} (${currentMonth} ${currentYear})
 ${tourType === "route" ? `- Transport: ${transportMethod}` : ""}
 
+=== CRITICAL RULES ===
 
-=== PART 3: THE GENERATION FRAMEWORK (STEP-BY-STEP LOGIC) ===
+- ALWAYS use quantitative data: years, populations, dimensions, dates
+- ALWAYS use relatable comparisons for measurements (football fields, buildings, etc.)
+- ALWAYS mention current season/month and relevant festivals or events
+- NO coordinate numbers, latitude/longitude, or GPS values in the script
+- NO boring data points—only stats that create wonder or context
+- NO filler words—every sentence must deliver value
+- Target length: ~${audioLength * 150} words
+- Cite sources naturally ("According to the National Museum...")
+- Natural sentence breaks for text-to-speech conversion
 
-Step 1: The "Vibe Check"
-- Input: Location (e.g., Rome, The Pantheon).
-- AI Action: Generate 3 adjectives that define the location (e.g., "Ancient," "Imposing," "Divine"). Use these in the Intro.
+=== EXAMPLE (SHORTENED) ===
 
-Step 2: The Narrative Arc
-- AI Action: Identify the "conflict" of the city. (In the source text, it was Barcelona's struggle for independence vs. the Spanish Crown).
-- Instruction: Ensure every historical fact mentioned ties back to this narrative arc.
+"Florence. Founded 59 BC by Julius Caesar. Population: 380,000. But 16 million tourists visit yearly—that's 42 visitors for every resident. Let's dive in.
 
-Step 3: The "Virtual Co-Pilot" (Optional Feature)
-- Analysis of Source: Rick uses "Lisa" for directions.
-- App Feature: If the tour is complex, split the script into two voices: The Storyteller (Cultural context) and The Navigator (Turn left, walk 50 meters).
+We're starting at the Duomo. Completed in 1436 after 140 years of construction. The dome spans 45 meters—wide enough to park 12 city buses side by side. Brunelleschi engineered it without scaffolding, a feat that stumped architects for decades.
 
-=== EXAMPLE OUTPUT STRUCTURE (PROOF OF CONCEPT) ===
+You're here in ${currentMonth}—${season === 'spring' ? 'perfect for the Scoppio del Carro Easter festival' : season === 'summer' ? 'expect crowds but longer days' : season === 'fall' ? 'ideal weather and the wine harvest season' : 'smaller crowds and Christmas markets starting soon'}.
 
-[Intro] "The Central Park Walk. As the green lung of a concrete giant, Central Park bubbles with energy. You'll find it in the rhythmic striding of joggers, the atmospheric shade of the elms, and the vibrant mix of New Yorkers seeking refuge. If you're in the mood to surrender to nature without leaving the skyscraper canyons, let it be here. Hi, I'm your guide. Thanks for joining me on this ramble through New York's backyard."
+Next, walk 200 meters to the Uffizi..."
 
-[Logistics] "We'll start at Columbus Circle, the dynamic gateway to the park. We'll wind through the winding paths of the Ramble, and end at Bethesda Fountain. This tour is best enjoyed in the morning light."
+=== YOUR MISSION ===
 
-[The Walk - Stop 1] "Now, let's get going. Walk through the Merchants' Gate. As you enter, notice how the noise of taxi horns begins to fade, replaced by rustling leaves. In the 1850s, this was a swampy, rocky terrain. It took a massive engineering effort—moving more earth than was moved for the Panama Canal—to create this 'natural' escape. It's a man-made miracle designed to heal the city soul."
-
-[Outro] "Today, Central Park is a canvas for 8 million people. As they say in New York, 'You made it.' I hope you enjoyed our walk. Now, go grab a pretzel, find a bench, and watch the world go by."
-
-=== CRITICAL CONSTRAINTS ===
-- Use academic sources (museums, universities, historical societies) - cite them naturally in the narration
-- Keep language accessible (but NOT simplistic)
-- Include natural pauses with "..."
-- TOTAL LENGTH: Approximately ${audioLength * 150} words (this is your target)
-- Script will be split into chunks for text-to-speech, so ensure natural breaking points between sentences
-- Always maintain the Rick Steves style throughout - enthusiastic, conversational, sensory-rich, historically-grounded
-- NEVER mention coordinate numbers, latitude/longitude values, or GPS coordinates in the audio script - use location names and descriptions only`;
+Create an audio tour that's data-rich, fast-paced, seasonally aware, and uses relatable comparisons. Cut the fluff. Get to the good stuff immediately.`;
 
       const numLandmarks = tourType === "route" ? Math.floor(audioLength / 5) : 0;
       const maxLandmarksForTime = Math.min(Math.max(numLandmarks, 4), 10);
@@ -944,6 +959,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
+      {generationProgress && (
+        <Text style={styles.generatingProgress}>{generationProgress}</Text>
+      )}
       <Text style={styles.generatingText}>Please do not close the app</Text>
     </Animated.View>
   );
@@ -1277,6 +1295,13 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     textAlign: "center",
     marginTop: -12,
+  },
+  generatingProgress: {
+    fontSize: 15,
+    color: Colors.light.primary,
+    textAlign: "center",
+    fontWeight: "600",
+    marginTop: -8,
   },
   progressBarContainer: {
     width: "100%",
