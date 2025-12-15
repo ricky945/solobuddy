@@ -260,14 +260,6 @@ export default function ExploreScreen() {
     setLandmarks([...landmarks, landmark]);
     globalLandmarksQuery.refetch();
   };
-  
-  const handleLandmarkUpdate = (updatedLandmark: MapLandmark) => {
-    console.log("[Explore] Updating landmark:", updatedLandmark.id);
-    setLandmarks(landmarks.map(l => l.id === updatedLandmark.id ? updatedLandmark : l));
-    if (selectedLandmark?.id === updatedLandmark.id) {
-      setSelectedLandmark(updatedLandmark);
-    }
-  };
 
   const getMarkerColor = (type: string) => {
     switch (type) {
@@ -501,7 +493,6 @@ export default function ExploreScreen() {
           setIsModalVisible(false);
           setSelectedLandmark(null);
         }}
-        onLandmarkUpdate={handleLandmarkUpdate}
       />
 
       {location && (
