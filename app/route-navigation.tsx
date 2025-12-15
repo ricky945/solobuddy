@@ -46,6 +46,7 @@ export default function RouteNavigationScreen() {
   const [showAiQuestion, setShowAiQuestion] = useState<boolean>(false);
   const [aiResponse, setAiResponse] = useState<string>("");
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false);
+  const modalFadeAnim = useRef(new Animated.Value(0)).current;
   
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -176,7 +177,7 @@ export default function RouteNavigationScreen() {
   };
 
   const handleArrived = () => {
-    transitionToStep("arrived");
+    transitionToStep("listening");
   };
 
   const handlePlayAudio = async () => {
@@ -202,7 +203,7 @@ export default function RouteNavigationScreen() {
       const landmark = tour.landmarks?.[currentLandmarkIndex];
       if (!landmark) return;
 
-      transitionToStep("listening");
+
 
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: tour.audioUrl },
@@ -360,28 +361,6 @@ export default function RouteNavigationScreen() {
     </Animated.View>
   );
 
-  const renderArrivedStep = () => (
-    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
-      <View style={styles.landmarkIconContainer}>
-        <MapPin size={48} color={Colors.light.primary} />
-      </View>
-      
-      <Text style={styles.stepTitle}>You&apos;re at</Text>
-      <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
-      
-      <Text style={styles.landmarkSummary}>{currentLandmark.description}</Text>
-      
-      <TouchableOpacity
-        style={styles.primaryButton}
-        activeOpacity={0.8}
-        onPress={handlePlayAudio}
-      >
-        <Play size={24} color={Colors.light.background} fill={Colors.light.background} />
-        <Text style={styles.primaryButtonText}>Listen to Audio Guide</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-
   const renderListeningStep = () => (
     <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
       <View style={styles.landmarkIconContainer}>
@@ -414,6 +393,11 @@ export default function RouteNavigationScreen() {
         onPress={() => {
           setShowAiQuestion(true);
           setAiResponse("");
+          Animated.timing(modalFadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
         }}
       >
         <MessageCircle size={20} color={Colors.light.primary} />
@@ -497,7 +481,6 @@ export default function RouteNavigationScreen() {
 
         <View style={styles.content}>
           {step === "navigate" && renderNavigateStep()}
-          {step === "arrived" && renderArrivedStep()}
           {step === "listening" && renderListeningStep()}
           {step === "complete" && renderCompleteStep()}
         </View>
@@ -508,12 +491,24 @@ export default function RouteNavigationScreen() {
           <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setShowAiQuestion(false)}
+            onPress={() => {
+              Animated.timing(modalFadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => setShowAiQuestion(false));
+            }}
           />
-          <Animated.View style={[styles.questionModal, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.questionModal, { opacity: modalFadeAnim }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ask Your Tour Guide</Text>
-              <TouchableOpacity onPress={() => setShowAiQuestion(false)}>
+              <TouchableOpacity onPress={() => {
+                Animated.timing(modalFadeAnim, {
+                  toValue: 0,
+                  duration: 200,
+                  useNativeDriver: true,
+                }).start(() => setShowAiQuestion(false));
+              }}>
                 <X size={24} color={Colors.light.text} />
               </TouchableOpacity>
             </View>

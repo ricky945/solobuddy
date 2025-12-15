@@ -93,6 +93,7 @@ export default function AddLandmarkModal({
   };
 
   const handleClose = () => {
+    Keyboard.dismiss();
     resetForm();
     onClose();
   };
@@ -310,6 +311,7 @@ export default function AddLandmarkModal({
                   placeholderTextColor={Colors.light.textSecondary}
                   returnKeyType="next"
                   blurOnSubmit={false}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               )}
 
@@ -325,6 +327,7 @@ export default function AddLandmarkModal({
                 textAlignVertical="top"
                 returnKeyType="done"
                 blurOnSubmit={true}
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
 
               <TouchableOpacity
@@ -340,7 +343,10 @@ export default function AddLandmarkModal({
 
               <TouchableOpacity
                 style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleSubmit();
+                }}
                 disabled={isSubmitting}
                 activeOpacity={0.7}
               >
