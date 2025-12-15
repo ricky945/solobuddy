@@ -100,7 +100,15 @@ export default function ExploreScreen() {
 
   useEffect(() => {
     if (discoverQuery.isError) {
-      console.error("[Explore] Failed to discover landmarks:", discoverQuery.error);
+      const error = discoverQuery.error;
+      console.error("[Explore] Failed to discover landmarks:", {
+        error,
+        message: error?.message,
+        data: error?.data,
+        shape: error?.shape,
+        code: error?.data?.code,
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      });
     }
   }, [discoverQuery.isError, discoverQuery.error]);
 
@@ -329,7 +337,9 @@ export default function ExploreScreen() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Failed to load landmarks</Text>
               <Text style={styles.errorMessage}>
-                {discoverQuery.error?.message || "Unknown error"}
+                {discoverQuery.error?.message || 
+                 (discoverQuery.error?.data?.code ? `Error: ${discoverQuery.error.data.code}` : null) ||
+                 "An unexpected error occurred. Please try again."}
               </Text>
               <TouchableOpacity
                 style={styles.retryButton}
