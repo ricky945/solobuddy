@@ -71,33 +71,59 @@ export default publicProcedure
 
       console.log("[Landmarks] Google Places request:", JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(
-        "https://places.googleapis.com/v1/places:searchNearby",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask":
-              "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.primaryTypeDisplayName,places.editorialSummary,places.photos",
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      let response;
+      try {
+        response = await fetch(
+          "https://places.googleapis.com/v1/places:searchNearby",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": apiKey,
+              "X-Goog-FieldMask":
+                "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.primaryTypeDisplayName,places.editorialSummary,places.photos",
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }
+        );
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       console.log("[Landmarks] Response status:", response.status);
 
       if (!response.ok) {
         let errorText = "Unknown error";
+        let errorDetails = null;
         try {
-          errorText = await response.text();
+          const responseText = await response.text();
+          try {
+            errorDetails = JSON.parse(responseText);
+            errorText = errorDetails.error?.message || responseText;
+          } catch {
+            errorText = responseText;
+          }
           console.error("[Landmarks] Google Places error:", errorText);
         } catch (e) {
           console.error("[Landmarks] Failed to read error:", e);
         }
+
+        const errorCode = response.status === 429 ? "TOO_MANY_REQUESTS" : 
+                         response.status >= 500 ? "INTERNAL_SERVER_ERROR" :
+                         response.status === 403 ? "FORBIDDEN" :
+                         "BAD_REQUEST";
+
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Google Places error (${response.status}): ${errorText.substring(0, 200)}`,
+          code: errorCode,
+          message: response.status === 429 
+            ? "Rate limit exceeded. Please try again in a moment."
+            : response.status >= 500
+            ? "Google Places service is temporarily unavailable. Please try again."
+            : `Google Places error (${response.status}): ${errorText.substring(0, 150)}`,
         });
       }
 
@@ -146,14 +172,30 @@ export default publicProcedure
     } catch (error: any) {
       console.error("[Landmarks] Error:", error);
       console.error("[Landmarks] Message:", error?.message);
+      console.error("[Landmarks] Name:", error?.name);
 
       if (error instanceof TRPCError) {
         throw error;
       }
 
+      if (error?.name === 'AbortError') {
+        throw new TRPCError({
+          code: "TIMEOUT",
+          message: "Request timed out. Please check your connection and try again.",
+        });
+      }
+
+      const isNetworkError = 
+        error?.message?.toLowerCase()?.includes('network') ||
+        error?.message?.toLowerCase()?.includes('fetch') ||
+        error?.code === 'ECONNREFUSED' ||
+        error?.code === 'ETIMEDOUT';
+
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: error?.message || "Failed to discover landmarks",
+        code: isNetworkError ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
+        message: isNetworkError 
+          ? "Network error. Please check your internet connection."
+          : error?.message || "Failed to discover landmarks",
       });
     }
   });

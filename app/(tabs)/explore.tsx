@@ -93,8 +93,16 @@ export default function ExploreScreen() {
       enabled: !!location,
       refetchOnWindowFocus: false,
       staleTime: 300000,
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     }
   );
+
+  useEffect(() => {
+    if (discoverQuery.isError) {
+      console.error("[Explore] Failed to discover landmarks:", discoverQuery.error);
+    }
+  }, [discoverQuery.isError, discoverQuery.error]);
 
   useEffect(() => {
     if (discoverQuery.data?.landmarks) {
@@ -312,6 +320,24 @@ export default function ExploreScreen() {
               <Text style={styles.loadingOverlayText}>
                 Loading landmarks...
               </Text>
+            </View>
+          </View>
+        )}
+
+        {discoverQuery.isError && (
+          <View style={styles.errorOverlay}>
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Failed to load landmarks</Text>
+              <Text style={styles.errorMessage}>
+                {discoverQuery.error?.message || "Unknown error"}
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => discoverQuery.refetch()}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -636,5 +662,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.textSecondary,
     lineHeight: 18,
+  },
+  errorOverlay: {
+    position: "absolute" as const,
+    top: 60,
+    left: 20,
+    right: 20,
+    alignItems: "center",
+  },
+  errorCard: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: "#EF4444",
+  },
+  errorTitle: {
+    fontSize: 14,
+    color: Colors.light.text,
+    fontWeight: "700" as const,
+  },
+  errorMessage: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 13,
+    color: "#fff",
+    fontWeight: "600" as const,
   },
 });
