@@ -210,6 +210,8 @@ export default function AudioPlayer({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldDuckAndroid: true,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
       });
       console.log("[AudioPlayer] Audio mode configured");
     } catch (error) {

@@ -11,6 +11,8 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { X, MapPin, Camera } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -244,22 +246,31 @@ export default function AddLandmarkModal({
         ) : (
         <KeyboardAvoidingView 
           style={[styles.modalContent, styles.modalContentTall, styles.formModal]}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={0}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => setSelectedType(null)}>
-              <Text style={styles.backButton}>← Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color={Colors.light.text} />
-            </TouchableOpacity>
-          </View>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => {
+                Keyboard.dismiss();
+                setSelectedType(null);
+              }}>
+                <Text style={styles.backButton}>← Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.closeButton} onPress={() => {
+                Keyboard.dismiss();
+                handleClose();
+              }}>
+                <X size={24} color={Colors.light.text} />
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
 
           <ScrollView 
             style={styles.scrollView} 
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={styles.scrollViewContent}
           >
             <View style={styles.formContainer}>
@@ -297,6 +308,8 @@ export default function AddLandmarkModal({
                   onChangeText={setLocationName}
                   placeholder="Enter location name"
                   placeholderTextColor={Colors.light.textSecondary}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               )}
 
@@ -310,6 +323,8 @@ export default function AddLandmarkModal({
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
+                returnKeyType="done"
+                blurOnSubmit={true}
               />
 
               <TouchableOpacity
@@ -372,8 +387,7 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   modalContentTall: {
-    maxHeight: "90%",
-    minHeight: "70%",
+    maxHeight: "92%",
   },
   header: {
     flexDirection: "row" as const,
@@ -439,6 +453,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
+    paddingBottom: Platform.OS === "ios" ? 20 : 100,
   },
   formContainer: {
     padding: 20,
