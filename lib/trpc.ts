@@ -143,12 +143,29 @@ export const trpcClient = trpc.createClient({
           }
           
           console.error('[tRPC] Request failed:', errorMessage);
+          console.error('[tRPC] Raw error:', error);
           console.error('[tRPC] Error type:', typeof error);
-          console.error('[tRPC] Error keys:', error && typeof error === 'object' ? Object.keys(error) : 'N/A');
-          try {
-            console.error('[tRPC] Error JSON:', JSON.stringify(error, null, 2));
-          } catch {
-            console.error('[tRPC] Cannot stringify error');
+          console.error('[tRPC] Error constructor:', error?.constructor?.name);
+          
+          if (error && typeof error === 'object') {
+            console.error('[tRPC] Error.name:', (error as any).name);
+            console.error('[tRPC] Error.message:', (error as any).message);
+            console.error('[tRPC] Error.stack:', (error as any).stack);
+            console.error('[tRPC] Error.cause:', (error as any).cause);
+            console.error('[tRPC] Error.code:', (error as any).code);
+            
+            const allKeys = Object.getOwnPropertyNames(error);
+            console.error('[tRPC] All property names:', allKeys);
+            
+            const extracted: any = {};
+            allKeys.forEach(key => {
+              try {
+                extracted[key] = (error as any)[key];
+              } catch {
+                extracted[key] = '[Error accessing property]';
+              }
+            });
+            console.error('[tRPC] Extracted properties:', extracted);
           }
           
           if (isNetworkError(error)) {
