@@ -2,25 +2,20 @@ import { createTRPCReact } from "@trpc/react-query";
 import { httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
-import { Platform } from "react-native";
 
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  const projectId = "buhvfi1mufdztgwxbocnu";
+  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const currentHost = window.location.host;
-    if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
-      const baseUrl = `http://localhost:8081/api`;
-      console.log("[tRPC] Using local development URL:", baseUrl);
-      return baseUrl.replace('/api', '');
-    }
+  if (!url) {
+    throw new Error(
+      "EXPO_PUBLIC_RORK_API_BASE_URL is not set. Please contact support."
+    );
   }
   
-  const baseUrl = `https://dev-${projectId}.rorktest.dev`;
-  console.log("[tRPC] Using production URL:", baseUrl);
-  return baseUrl;
+  console.log("[tRPC] Using backend URL:", url);
+  return url;
 };
 
 export const trpcClient = trpc.createClient({
