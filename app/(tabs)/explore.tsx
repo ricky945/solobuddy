@@ -98,17 +98,37 @@ export default function ExploreScreen() {
     }
   );
 
+  const getErrorMessage = (error: any): string => {
+    if (!error) return "An unexpected error occurred";
+    
+    if (typeof error === 'string') return error;
+    
+    if (error.message && typeof error.message === 'string') {
+      return error.message;
+    }
+    
+    if (error.data?.code) {
+      return `Error code: ${error.data.code}`;
+    }
+    
+    if (error.shape?.message) {
+      return error.shape.message;
+    }
+    
+    try {
+      const str = JSON.stringify(error);
+      if (str && str !== '{}') return `Error: ${str.substring(0, 100)}`;
+    } catch {}
+    
+    return "An unexpected error occurred. Please try again.";
+  };
+
   useEffect(() => {
     if (discoverQuery.isError) {
       const error = discoverQuery.error;
-      console.error("[Explore] Failed to discover landmarks:", {
-        error,
-        message: error?.message,
-        data: error?.data,
-        shape: error?.shape,
-        code: error?.data?.code,
-        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      });
+      const errorMsg = getErrorMessage(error);
+      console.error("[Explore] Failed to discover landmarks:", errorMsg);
+      console.error("[Explore] Error object:", error);
     }
   }, [discoverQuery.isError, discoverQuery.error]);
 
@@ -337,9 +357,7 @@ export default function ExploreScreen() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Failed to load landmarks</Text>
               <Text style={styles.errorMessage}>
-                {discoverQuery.error?.message || 
-                 (discoverQuery.error?.data?.code ? `Error: ${discoverQuery.error.data.code}` : null) ||
-                 "An unexpected error occurred. Please try again."}
+                {getErrorMessage(discoverQuery.error)}
               </Text>
               <TouchableOpacity
                 style={styles.retryButton}

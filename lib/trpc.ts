@@ -120,13 +120,20 @@ export const trpcClient = trpc.createClient({
           if (error instanceof Error) {
             errorMessage = error.message;
           } else if (typeof error === 'object' && error !== null) {
-            if ('message' in error && error.message) {
+            if ('message' in error && typeof error.message === 'string') {
+              errorMessage = error.message;
+            } else if ('message' in error && error.message) {
               errorMessage = String(error.message);
             } else {
               try {
-                errorMessage = JSON.stringify(error);
+                const keys = Object.keys(error);
+                if (keys.length > 0) {
+                  errorMessage = `Error with properties: ${keys.join(', ')}`;
+                } else {
+                  errorMessage = 'Unknown error (empty object)';
+                }
               } catch {
-                errorMessage = String(error);
+                errorMessage = 'Unknown error';
               }
             }
           } else if (typeof error === 'string') {
@@ -136,7 +143,13 @@ export const trpcClient = trpc.createClient({
           }
           
           console.error('[tRPC] Request failed:', errorMessage);
-          console.error('[tRPC] Full error:', error);
+          console.error('[tRPC] Error type:', typeof error);
+          console.error('[tRPC] Error keys:', error && typeof error === 'object' ? Object.keys(error) : 'N/A');
+          try {
+            console.error('[tRPC] Error JSON:', JSON.stringify(error, null, 2));
+          } catch {
+            console.error('[tRPC] Cannot stringify error');
+          }
           
           if (isNetworkError(error)) {
             if (Platform.OS === 'web') {
