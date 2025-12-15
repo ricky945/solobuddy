@@ -118,22 +118,43 @@ export const trpcClient = trpc.createClient({
           let errorMessage = 'Unknown error occurred';
           
           if (error instanceof Error) {
-            errorMessage = error.message;
-          } else if (typeof error === 'object' && error !== null) {
-            if ('message' in error && typeof error.message === 'string') {
+            if (typeof error.message === 'object' && error.message !== null) {
+              try {
+                errorMessage = JSON.stringify(error.message);
+              } catch {
+                errorMessage = 'Error with non-serializable message object';
+              }
+            } else if (error.message) {
               errorMessage = error.message;
-            } else if ('message' in error && error.message) {
-              errorMessage = String(error.message);
+            } else {
+              errorMessage = 'Unknown error';
+            }
+          } else if (typeof error === 'object' && error !== null) {
+            if ('message' in error) {
+              if (typeof error.message === 'string') {
+                errorMessage = error.message;
+              } else if (typeof error.message === 'object' && error.message !== null) {
+                try {
+                  errorMessage = JSON.stringify(error.message);
+                } catch {
+                  errorMessage = 'Error with non-serializable message';
+                }
+              } else {
+                errorMessage = String(error.message);
+              }
             } else {
               try {
-                const keys = Object.keys(error);
-                if (keys.length > 0) {
-                  errorMessage = `Error with properties: ${keys.join(', ')}`;
+                const jsonStr = JSON.stringify(error);
+                if (jsonStr !== '{}') {
+                  errorMessage = jsonStr;
                 } else {
-                  errorMessage = 'Unknown error (empty object)';
+                  const keys = Object.keys(error);
+                  errorMessage = keys.length > 0 
+                    ? `Error with properties: ${keys.join(', ')}`
+                    : 'Unknown error (empty object)';
                 }
               } catch {
-                errorMessage = 'Unknown error';
+                errorMessage = 'Error with non-serializable object';
               }
             }
           } else if (typeof error === 'string') {
@@ -143,29 +164,18 @@ export const trpcClient = trpc.createClient({
           }
           
           console.error('[tRPC] Request failed:', errorMessage);
-          console.error('[tRPC] Raw error:', error);
           console.error('[tRPC] Error type:', typeof error);
-          console.error('[tRPC] Error constructor:', error?.constructor?.name);
           
           if (error && typeof error === 'object') {
-            console.error('[tRPC] Error.name:', (error as any).name);
-            console.error('[tRPC] Error.message:', (error as any).message);
-            console.error('[tRPC] Error.stack:', (error as any).stack);
-            console.error('[tRPC] Error.cause:', (error as any).cause);
-            console.error('[tRPC] Error.code:', (error as any).code);
-            
-            const allKeys = Object.getOwnPropertyNames(error);
-            console.error('[tRPC] All property names:', allKeys);
-            
-            const extracted: any = {};
-            allKeys.forEach(key => {
-              try {
-                extracted[key] = (error as any)[key];
-              } catch {
-                extracted[key] = '[Error accessing property]';
-              }
+            const errorObj = error as any;
+            console.error('[tRPC] Error details:', {
+              name: errorObj.name,
+              message: typeof errorObj.message === 'object' 
+                ? JSON.stringify(errorObj.message) 
+                : errorObj.message,
+              code: errorObj.code,
+              stack: errorObj.stack?.substring(0, 200),
             });
-            console.error('[tRPC] Extracted properties:', extracted);
           }
           
           if (isNetworkError(error)) {
