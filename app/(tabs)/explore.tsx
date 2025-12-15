@@ -82,25 +82,33 @@ export default function ExploreScreen() {
     })
   ).current;
 
-  const landmarksQuery = trpc.landmarks.getAll.useQuery(
+  const discoverQuery = trpc.landmarks.discover.useQuery(
     {
-      latitude: location?.coords.latitude,
-      longitude: location?.coords.longitude,
-      radius: 50,
+      latitude: location?.coords.latitude || 0,
+      longitude: location?.coords.longitude || 0,
+      radius: 5000,
+      type: activeTab,
     },
     {
       enabled: !!location,
       refetchOnWindowFocus: false,
-      staleTime: 30000,
+      staleTime: 300000,
     }
   );
 
   useEffect(() => {
-    if (landmarksQuery.data) {
-      console.log("[Explore] Landmarks loaded:", landmarksQuery.data.landmarks?.length || 0);
-      setLandmarks(landmarksQuery.data.landmarks || []);
+    if (discoverQuery.data?.landmarks) {
+      console.log("[Explore] Landmarks loaded:", discoverQuery.data.landmarks.length, "from", discoverQuery.data.source);
+      setLandmarks(discoverQuery.data.landmarks as MapLandmark[]);
     }
-  }, [landmarksQuery.data]);
+  }, [discoverQuery.data]);
+
+  useEffect(() => {
+    if (location) {
+      console.log("[Explore] Refetching for tab:", activeTab);
+      discoverQuery.refetch();
+    }
+  }, [activeTab, location, discoverQuery]);
 
   useEffect(() => {
     getLocationAsync();
@@ -189,7 +197,7 @@ export default function ExploreScreen() {
   const handleAddLandmark = (landmark: MapLandmark) => {
     console.log("[Explore] Adding user landmark:", landmark);
     setLandmarks([...landmarks, landmark]);
-    landmarksQuery.refetch();
+    discoverQuery.refetch();
   };
 
   const getMarkerColor = (type: string) => {
@@ -205,16 +213,7 @@ export default function ExploreScreen() {
     }
   };
 
-  const filteredLandmarks = landmarks.filter(landmark => {
-    if (activeTab === "touristic") {
-      return landmark.type === "touristic";
-    } else if (activeTab === "restaurant") {
-      return landmark.type === "restaurant";
-    } else if (activeTab === "unique") {
-      return landmark.type === "unique";
-    }
-    return true;
-  });
+  const filteredLandmarks = landmarks;
 
   const getTabIcon = (tab: LocationTab) => {
     switch (tab) {
@@ -306,7 +305,7 @@ export default function ExploreScreen() {
           ))}
         </MapView>
 
-        {landmarksQuery.isLoading && (
+        {discoverQuery.isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingCard}>
               <ActivityIndicator size="small" color={Colors.light.primary} />

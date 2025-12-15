@@ -2,145 +2,185 @@ import { z } from "zod";
 import { publicProcedure } from "@/backend/trpc/create-context";
 import { TRPCError } from "@trpc/server";
 
+interface GooglePlaceResult {
+  id: string;
+  displayName: { text: string };
+  formattedAddress?: string;
+  location: { latitude: number; longitude: number };
+  types?: string[];
+  primaryTypeDisplayName?: { text: string };
+  editorialSummary?: { text: string };
+  photos?: {
+    name: string;
+    widthPx: number;
+    heightPx: number;
+  }[];
+}
+
+interface GooglePlacesResponse {
+  places: GooglePlaceResult[];
+}
+
 export default publicProcedure
   .input(
     z.object({
       latitude: z.number(),
       longitude: z.number(),
-      radius: z.number().optional().default(2),
+      radius: z.number().optional().default(5000),
+      type: z.enum(["touristic", "restaurant", "unique"]).optional().default("touristic"),
     })
   )
   .query(async ({ input }) => {
     try {
-      const apiKey = (process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
+      const apiKey = (
+        process.env.GOOGLE_PLACES_API_KEY ||
+        process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ||
+        ""
+      ).toString().trim();
 
-      console.log("[Landmarks] Discovering landmarks at:", input);
+      console.log("[Landmarks] Discovering landmarks via Google Places:", input);
 
       if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
-        console.error("[Landmarks] OpenAI API key not configured");
+        console.error("[Landmarks] Google Places API key not configured");
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "OpenAI API key not configured. Please add EXPO_PUBLIC_OPENAI_API_KEY to your environment variables.",
+          message: "Google Places API key not configured.",
         });
       }
 
-      console.log("[Landmarks] Making request to OpenAI...");
-      console.log("[Landmarks] API Key present:", !!apiKey, "Length:", apiKey.length);
-      
+      const includedTypes = input.type === "restaurant" 
+        ? ["restaurant", "cafe", "bar"]
+        : input.type === "unique"
+        ? ["art_gallery", "museum", "park", "shopping_mall", "landmark"]
+        : ["tourist_attraction", "museum", "church", "park", "monument", "landmark"];
+
       const requestBody = {
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a knowledgeable tour guide assistant. Given a location's coordinates, identify the 10-15 most significant landmarks within the specified radius. Return ONLY a valid JSON array with no additional text or markdown formatting.
-
-Each landmark should include:
-- id: unique identifier (use lowercase name with dashes)
-- name: landmark name
-- description: 2-3 sentence description of the landmark's significance
-- coordinates: {latitude, longitude} (as accurate as possible)
-- imageUrl: a relevant Unsplash URL (use format: https://images.unsplash.com/photo-[id]?w=800&fit=crop)
-- category: one of: historical, cultural, religious, museum, park, monument, building, natural
-- type: must be "touristic" (this is an AI-generated landmark)
-
-Return ONLY the JSON array, no other text.`,
+        includedTypes,
+        maxResultCount: 20,
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude: input.latitude,
+              longitude: input.longitude,
+            },
+            radius: input.radius,
           },
-          {
-            role: "user",
-            content: `Find landmarks near coordinates: ${input.latitude}, ${input.longitude} within ${input.radius}km radius. Include major tourist attractions, historical sites, museums, parks, and culturally significant locations.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 3000,
+        },
+        languageCode: "en",
       };
 
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      console.log("[Landmarks] Google Places request:", JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(
+        "https://places.googleapis.com/v1/places:searchNearby",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask":
+              "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.primaryTypeDisplayName,places.editorialSummary,places.photos",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
 
       console.log("[Landmarks] Response status:", response.status);
-      console.log("[Landmarks] Response headers:", Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         let errorText = "Unknown error";
         try {
           errorText = await response.text();
-          console.error("[Landmarks] OpenAI API error response:", errorText);
+          console.error("[Landmarks] Google Places error:", errorText);
         } catch (e) {
-          console.error("[Landmarks] Failed to read error response:", e);
+          console.error("[Landmarks] Failed to read error:", e);
         }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `OpenAI API error (${response.status}): ${errorText.substring(0, 200)}`,
+          message: `Google Places error (${response.status}): ${errorText.substring(0, 200)}`,
         });
       }
 
-      const data = await response.json();
-      console.log("[Landmarks] OpenAI response received successfully");
+      const data = (await response.json()) as GooglePlacesResponse;
+      console.log("[Landmarks] Found", data.places?.length || 0, "places");
 
-      const content = data.choices?.[0]?.message?.content;
-      if (!content) {
-        console.error("[Landmarks] No content in OpenAI response:", data);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "No content in OpenAI response",
-        });
-      }
+      const landmarks = (data.places || []).map((place) => {
+        const category = getCategoryFromTypes(place.types || []);
+        const photoUrl = place.photos?.[0]
+          ? `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=800&key=${apiKey}`
+          : `https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&fit=crop`;
 
-      const cleanContent = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      console.log("[Landmarks] Parsing landmarks from cleaned content");
-      
-      let landmarks;
-      try {
-        landmarks = JSON.parse(cleanContent);
-      } catch (parseError: any) {
-        console.error("[Landmarks] JSON parse error:", parseError);
-        console.error("[Landmarks] Content was:", cleanContent.substring(0, 500));
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to parse OpenAI response: ${parseError.message}`,
-        });
-      }
-      
-      if (!Array.isArray(landmarks)) {
-        console.error("[Landmarks] Response is not an array:", landmarks);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Invalid landmarks format: expected array",
-        });
-      }
+        return {
+          id: place.id,
+          name: place.displayName.text,
+          description:
+            place.editorialSummary?.text ||
+            place.primaryTypeDisplayName?.text ||
+            `A notable ${category} location`,
+          coordinates: {
+            latitude: place.location.latitude,
+            longitude: place.location.longitude,
+          },
+          imageUrl: photoUrl,
+          category,
+          type: input.type,
+          createdBy: "google-places",
+          createdByName: "Google Places",
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        };
+      });
 
-      console.log("[Landmarks] Successfully discovered", landmarks.length, "landmarks");
-
-      const landmarksWithType = landmarks.map((landmark: any) => ({
-        ...landmark,
-        type: "touristic" as const,
-      }));
+      console.log("[Landmarks] Successfully mapped", landmarks.length, "landmarks");
 
       return {
-        landmarks: landmarksWithType,
+        landmarks,
         location: {
           latitude: input.latitude,
           longitude: input.longitude,
         },
+        source: "google_places" as const,
       };
     } catch (error: any) {
-      console.error("[Landmarks] Error discovering landmarks:", error);
-      console.error("[Landmarks] Error message:", error?.message);
-      console.error("[Landmarks] Error stack:", error?.stack);
-      
+      console.error("[Landmarks] Error:", error);
+      console.error("[Landmarks] Message:", error?.message);
+
       if (error instanceof TRPCError) {
         throw error;
       }
-      
+
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: error?.message || "Failed to discover landmarks",
       });
     }
   });
+
+function getCategoryFromTypes(
+  types: string[]
+): "historical" | "cultural" | "religious" | "museum" | "park" | "monument" | "building" | "natural" {
+  if (types.includes("church") || types.includes("mosque") || types.includes("synagogue") || types.includes("hindu_temple")) {
+    return "religious";
+  }
+  if (types.includes("museum") || types.includes("art_gallery")) {
+    return "museum";
+  }
+  if (types.includes("park") || types.includes("national_park")) {
+    return "park";
+  }
+  if (types.includes("monument")) {
+    return "monument";
+  }
+  if (types.includes("natural_feature")) {
+    return "natural";
+  }
+  if (types.includes("tourist_attraction")) {
+    return "historical";
+  }
+  if (types.includes("cultural_center")) {
+    return "cultural";
+  }
+  return "building";
+}
