@@ -41,10 +41,9 @@ import Colors from "@/constants/colors";
 import {
   TOPICS,
   AUDIO_LENGTHS,
-  AREA_SPECIFICITY,
   TRANSPORT_METHODS,
 } from "@/mocks/tours";
-import { Topic, AreaSpecificity, AudioLength, TransportMethod, AudioGuide } from "@/types";
+import { Topic, AudioLength, TransportMethod, AudioGuide } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import { generateTTS } from "@/lib/tts-client";
@@ -61,7 +60,7 @@ const iconMap = {
   Car,
 };
 
-type FlowStep = "welcome" | "tourType" | "location" | "topics" | "areaSpecificity" | "audioLength" | "transport" | "generating";
+type FlowStep = "welcome" | "tourType" | "location" | "topics" | "audioLength" | "transport" | "generating";
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -72,7 +71,6 @@ export default function ExploreScreen() {
   const [location, setLocation] = useState<string>("");
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
-  const [areaSpecificity, setAreaSpecificity] = useState<AreaSpecificity>("city");
   const [audioLength, setAudioLength] = useState<AudioLength>(20);
   const [transportMethod, setTransportMethod] = useState<TransportMethod>("walking");
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
@@ -105,11 +103,8 @@ export default function ExploreScreen() {
       case "topics":
         setFlowStep("location");
         break;
-      case "areaSpecificity":
-        setFlowStep("topics");
-        break;
       case "audioLength":
-        setFlowStep("areaSpecificity");
+        setFlowStep("topics");
         break;
       case "transport":
         setFlowStep("audioLength");
@@ -125,7 +120,6 @@ export default function ExploreScreen() {
     setLocation("");
     setLocationCoords(null);
     setSelectedTopics([]);
-    setAreaSpecificity("city");
     setAudioLength(20);
     setTransportMethod("walking");
     setGenerationProgress("");
@@ -301,7 +295,8 @@ You are a world-class travel guide creating immersive, fast-paced audio tours. Y
    - Lead with the most compelling fact or vibe
    - Example: "Barcelona. Founded 15 BC. 1.6 million people. Let's go."
 
-2. USE QUANTITATIVE DATA WITH IMPACT
+2. USE QUANTITATIVE DATA WITH IMPACT (DISTRIBUTED THROUGHOUT)
+   - Weave data naturally throughout the entire tour, not just at the beginning
    - Always include: founding years, population, dates of major events, dimensions
    - Make numbers relatable with comparisons:
      * Heights: "That's 3 Statues of Liberty stacked"
@@ -309,6 +304,7 @@ You are a world-class travel guide creating immersive, fast-paced audio tours. Y
      * Time spans: "Older than the printing press"
      * Scale: "Could fit 50,000 people—more than a sold-out stadium"
    - Use data that listeners actually care about—skip boring statistics
+   - Distribute quantitative facts naturally as you discuss each location or topic
    - Example: Instead of "The building is 828 meters tall", say "The building stretches 828 meters—nearly twice the height of the Empire State Building"
 
 3. SEASONAL & EVENT-AWARE
@@ -339,10 +335,12 @@ You are a world-class travel guide creating immersive, fast-paced audio tours. Y
    - Best times based on current season
 
 3. THE TOUR (CORE CONTENT)
-   - Each stop: Lead with a quantitative fact, then context
+   - Each stop: Blend engaging narrative with quantitative facts throughout
+   - Don't frontload all numbers—sprinkle them naturally where they enhance understanding
    - Use relatable comparisons for all measurements
    - Connect history to today with specific data points
    - Example: "Built in 1345. That's 200 years before Columbus sailed. Today, 20,000 visitors walk through daily"
+   - Let the user's selected interests guide where you place emphasis and facts
 
 4. OUTRO (FINAL 30 SECONDS)
    - Summary stat (total years of history, number of landmarks covered)
@@ -355,7 +353,6 @@ You are a world-class travel guide creating immersive, fast-paced audio tours. Y
 - Duration: ${audioLength} minutes
 - Topics: ${selectedTopics.join(", ")}
 - Type: ${tourType === "route" ? "Route with navigation" : "Immersive listening"}
-- Area: ${areaSpecificity}
 - Current Season: ${season} (${currentMonth} ${currentYear})
 ${tourType === "route" ? `- Transport: ${transportMethod}` : ""}
 
@@ -394,7 +391,7 @@ Return JSON with:
 - title: Catchy title
 - description: 2-3 sentence description  
 - script: Full detailed spoken script for a ${audioLength}-minute audio tour (~${audioLength * 150} words). Write it as if you're the narrator speaking directly to the listener. Include an engaging introduction, detailed information about each topic, interesting stories and facts, and a memorable conclusion. Make it flow naturally as spoken narration.
-${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real landmarks within the user's area (${areaSpecificity}) with {name, description, coordinates: {latitude, longitude}, timestamp}. These should be actual places reachable via ${transportMethod}.\n- famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}\n- hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
+${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real landmarks near ${location} with {name, description, coordinates: {latitude, longitude}, timestamp}. These should be actual places reachable via ${transportMethod}.\n- famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}\n- hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
 
       setGenerationProgress("Creating tour content...");
       console.log("[Tour Generation] Calling AI...");
@@ -616,7 +613,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         location: cleanLocation,
         locationCoords: locationCoords || undefined,
         topics: selectedTopics,
-        areaSpecificity,
+        areaSpecificity: "city",
         audioLength,
         transportMethod: tourType === "route" ? transportMethod : undefined,
         audioUrl,
@@ -823,42 +820,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         style={[styles.ctaButton, !canProceedFromTopics && styles.ctaButtonDisabled]}
         activeOpacity={0.85}
         disabled={!canProceedFromTopics}
-        onPress={() => goToNextStep("areaSpecificity")}
-      >
-        <Text style={styles.ctaButtonText}>Continue</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-
-  const renderAreaSpecificity = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>What&apos;s your focus?</Text>
-      <View style={styles.optionsVertical}>
-        {AREA_SPECIFICITY.map((area) => (
-          <TouchableOpacity
-            key={area.value}
-            style={[
-              styles.simpleOptionCard,
-              areaSpecificity === area.value && styles.simpleOptionCardSelected,
-            ]}
-            activeOpacity={0.7}
-            onPress={() => setAreaSpecificity(area.value)}
-          >
-            <View style={styles.simpleOptionContent}>
-              <Text style={styles.simpleOptionLabel}>{area.label}</Text>
-              <Text style={styles.simpleOptionDescription}>
-                {area.description}
-              </Text>
-            </View>
-            {areaSpecificity === area.value && (
-              <View style={styles.selectedIndicator} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity
-        style={styles.ctaButton}
-        activeOpacity={0.85}
         onPress={() => goToNextStep("audioLength")}
       >
         <Text style={styles.ctaButtonText}>Continue</Text>
@@ -976,8 +937,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         return renderLocation();
       case "topics":
         return renderTopics();
-      case "areaSpecificity":
-        return renderAreaSpecificity();
       case "audioLength":
         return renderAudioLength();
       case "transport":

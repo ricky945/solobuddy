@@ -4,14 +4,10 @@ import {
   Text,
   View,
   TouchableOpacity,
-  ScrollView,
   Platform,
   Animated,
   Alert,
-  TextInput,
-  KeyboardAvoidingView,
   ActivityIndicator,
-  Modal,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -19,21 +15,20 @@ import {
   Play,
   Pause,
   Navigation as NavigationIcon,
-  Check,
   ArrowRight,
   X,
   MessageCircle,
-  Mic,
-  Send,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { Audio } from "expo-av";
+import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
 import { useTours } from "@/contexts/ToursContext";
 
+type NavigationStep = "navigate" | "arrived" | "listening" | "complete";
 
 export default function RouteNavigationScreen() {
   const { tourId } = useLocalSearchParams();
@@ -43,19 +38,16 @@ export default function RouteNavigationScreen() {
   const tour = getTourById(tourId as string);
   
   const [currentLandmarkIndex, setCurrentLandmarkIndex] = useState<number>(0);
+  const [step, setStep] = useState<NavigationStep>("navigate");
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [distanceToLandmark, setDistanceToLandmark] = useState<string>("");
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [showAiModal, setShowAiModal] = useState<boolean>(false);
-  const [aiQuestion, setAiQuestion] = useState<string>("");
+  const [showAiQuestion, setShowAiQuestion] = useState<boolean>(false);
   const [aiResponse, setAiResponse] = useState<string>("");
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false);
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const toRad = (value: number) => {
     return (value * Math.PI) / 180;
@@ -85,21 +77,6 @@ export default function RouteNavigationScreen() {
       setDistanceToLandmark(`${distance.toFixed(1)}km away`);
     }
   }, [tour, currentLandmarkIndex]);
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [currentLandmarkIndex, fadeAnim, slideAnim]);
 
   useEffect(() => {
     const setupAudio = async () => {
@@ -176,13 +153,31 @@ export default function RouteNavigationScreen() {
           console.error("[RouteNav] Error unloading sound:", err);
         });
       }
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(err => {
-          console.error("[RouteNav] Error stopping recording:", err);
-        });
-      }
     };
-  }, [sound, recording]);
+  }, [sound]);
+
+  const transitionToStep = (newStep: NavigationStep) => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    setTimeout(() => {
+      setStep(newStep);
+    }, 300);
+  };
+
+  const handleArrived = () => {
+    transitionToStep("arrived");
+  };
 
   const handlePlayAudio = async () => {
     if (!tour || !tour.audioUrl) {
@@ -207,6 +202,8 @@ export default function RouteNavigationScreen() {
       const landmark = tour.landmarks?.[currentLandmarkIndex];
       if (!landmark) return;
 
+      transitionToStep("listening");
+
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: tour.audioUrl },
         {
@@ -219,7 +216,7 @@ export default function RouteNavigationScreen() {
       setIsPlaying(true);
 
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && !status.isPlaying) {
+        if (status.isLoaded && !status.isPlaying && status.didJustFinish) {
           setIsPlaying(false);
         }
       });
@@ -229,32 +226,34 @@ export default function RouteNavigationScreen() {
     }
   };
 
-  const handleNextLandmark = () => {
+  const handleNextDestination = () => {
     if (!tour || !tour.landmarks) return;
 
     if (sound) {
-      sound.pauseAsync().catch(err => {
-        console.error("[RouteNav] Error pausing sound:", err);
+      sound.stopAsync().catch(err => {
+        console.error("[RouteNav] Error stopping sound:", err);
       });
       setIsPlaying(false);
     }
 
     if (currentLandmarkIndex < tour.landmarks.length - 1) {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-      setCurrentLandmarkIndex(currentLandmarkIndex + 1);
+      transitionToStep("navigate");
+      setTimeout(() => {
+        setCurrentLandmarkIndex(currentLandmarkIndex + 1);
+        setStep("navigate");
+      }, 300);
     } else {
-      Alert.alert(
-        "Tour Complete!",
-        "You've reached the end of your tour. Great job!",
-        [
-          {
-            text: "Finish",
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      transitionToStep("complete");
     }
+  };
+
+  const handleCompleteTour = () => {
+    if (sound) {
+      sound.unloadAsync().catch(err => {
+        console.error("[RouteNav] Error unloading sound:", err);
+      });
+    }
+    router.back();
   };
 
   const openInMaps = () => {
@@ -274,42 +273,27 @@ export default function RouteNavigationScreen() {
     }
   };
 
-  const handleAskAi = async () => {
-    if (!aiQuestion.trim()) return;
+  const handleAskQuestion = async (question: string) => {
+    if (!question.trim()) return;
 
     setIsLoadingAi(true);
     setAiResponse("");
 
     try {
-      const context = `Tour: ${tour?.title}\nCurrent Landmark: ${currentLandmark.name}\nDescription: ${currentLandmark.description}\nLocation: ${tour?.location}`;
+      const currentLandmark = tour?.landmarks?.[currentLandmarkIndex];
+      const context = `Tour: ${tour?.title}\nCurrent Landmark: ${currentLandmark?.name}\nDescription: ${currentLandmark?.description}\nLocation: ${tour?.location}`;
       
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4",
-          messages: [
-            {
-              role: "system",
-              content: `You are a helpful tour guide assistant. Answer questions about the current landmark and tour. Context: ${context}`,
-            },
-            {
-              role: "user",
-              content: aiQuestion,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
+      const response = await generateText({
+        messages: [
+          {
+            role: "user",
+            content: `You are a helpful tour guide assistant. Answer questions about the current landmark and tour concisely. Context: ${context}\n\nUser question: ${question}`,
+          },
+        ],
       });
 
-      const data = await response.json();
-
-      if (data.choices && data.choices[0]) {
-        setAiResponse(data.choices[0].message.content);
+      if (response) {
+        setAiResponse(response);
       } else {
         setAiResponse("Sorry, I couldn't get an answer. Please try again.");
       }
@@ -318,91 +302,6 @@ export default function RouteNavigationScreen() {
       setAiResponse("Sorry, something went wrong. Please try again.");
     } finally {
       setIsLoadingAi(false);
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      console.log("[RouteNav] Requesting audio permissions...");
-      const { granted } = await Audio.requestPermissionsAsync();
-
-      if (!granted) {
-        Alert.alert("Permission Required", "Please allow microphone access to use voice input.");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      console.log("[RouteNav] Starting recording...");
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(newRecording);
-      setIsRecording(true);
-    } catch (error) {
-      console.error("[RouteNav] Failed to start recording:", error);
-      Alert.alert("Recording Error", "Failed to start voice recording.");
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      console.log("[RouteNav] Stopping recording...");
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-
-      if (uri) {
-        await transcribeAudio(uri);
-      }
-
-      setRecording(null);
-    } catch (error) {
-      console.error("[RouteNav] Failed to stop recording:", error);
-      Alert.alert("Recording Error", "Failed to process voice recording.");
-    }
-  };
-
-  const transcribeAudio = async (audioUri: string) => {
-    try {
-      setIsLoadingAi(true);
-
-      const formData = new FormData();
-      formData.append("file", {
-        uri: audioUri,
-        type: "audio/m4a",
-        name: "recording.m4a",
-      } as any);
-      formData.append("model", "whisper-1");
-
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
-        },
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.text) {
-        setAiQuestion(data.text);
-        setIsLoadingAi(false);
-        await handleAskAi();
-      } else {
-        setIsLoadingAi(false);
-        Alert.alert("Transcription Error", "Failed to transcribe audio. Please try again.");
-      }
-    } catch (error) {
-      console.error("[RouteNav] Transcription error:", error);
-      setIsLoadingAi(false);
-      Alert.alert("Transcription Error", "Failed to transcribe audio. Please try again.");
     }
   };
 
@@ -422,9 +321,142 @@ export default function RouteNavigationScreen() {
   const progress = ((currentLandmarkIndex + 1) / tour.landmarks.length) * 100;
   const isLastLandmark = currentLandmarkIndex === tour.landmarks.length - 1;
 
+  const renderNavigateStep = () => (
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+      <View style={styles.landmarkIconContainer}>
+        <MapPin size={48} color={Colors.light.primary} />
+      </View>
+      
+      <Text style={styles.stepTitle}>Navigate to</Text>
+      <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
+      
+      {userLocation && distanceToLandmark && (
+        <View style={styles.distanceBadge}>
+          <NavigationIcon size={18} color={Colors.light.primary} />
+          <Text style={styles.distanceText}>{distanceToLandmark}</Text>
+        </View>
+      )}
+      
+      <Text style={styles.landmarkSummary}>{currentLandmark.description}</Text>
+      
+      <View style={styles.buttonGroup}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          activeOpacity={0.8}
+          onPress={openInMaps}
+        >
+          <NavigationIcon size={20} color={Colors.light.primary} />
+          <Text style={styles.secondaryButtonText}>Get Directions</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          activeOpacity={0.8}
+          onPress={handleArrived}
+        >
+          <Text style={styles.primaryButtonText}>I&apos;ve Arrived</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+
+  const renderArrivedStep = () => (
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+      <View style={styles.landmarkIconContainer}>
+        <MapPin size={48} color={Colors.light.primary} />
+      </View>
+      
+      <Text style={styles.stepTitle}>You&apos;re at</Text>
+      <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
+      
+      <Text style={styles.landmarkSummary}>{currentLandmark.description}</Text>
+      
+      <TouchableOpacity
+        style={styles.primaryButton}
+        activeOpacity={0.8}
+        onPress={handlePlayAudio}
+      >
+        <Play size={24} color={Colors.light.background} fill={Colors.light.background} />
+        <Text style={styles.primaryButtonText}>Listen to Audio Guide</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderListeningStep = () => (
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+      <View style={styles.landmarkIconContainer}>
+        <MapPin size={48} color={Colors.light.primary} />
+      </View>
+      
+      <Text style={styles.stepTitle}>Currently at</Text>
+      <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
+      
+      <View style={styles.audioPlayer}>
+        <TouchableOpacity
+          style={styles.audioButton}
+          activeOpacity={0.8}
+          onPress={handlePlayAudio}
+        >
+          {isPlaying ? (
+            <Pause size={28} color={Colors.light.background} fill={Colors.light.background} />
+          ) : (
+            <Play size={28} color={Colors.light.background} fill={Colors.light.background} />
+          )}
+        </TouchableOpacity>
+        <Text style={styles.audioStatus}>
+          {isPlaying ? "Playing audio guide..." : "Audio paused"}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.questionButton}
+        activeOpacity={0.8}
+        onPress={() => {
+          setShowAiQuestion(true);
+          setAiResponse("");
+        }}
+      >
+        <MessageCircle size={20} color={Colors.light.primary} />
+        <Text style={styles.questionButtonText}>Ask a Question</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.primaryButton}
+        activeOpacity={0.8}
+        onPress={handleNextDestination}
+      >
+        <Text style={styles.primaryButtonText}>
+          {isLastLandmark ? "Complete Tour" : "Next Destination"}
+        </Text>
+        {!isLastLandmark && <ArrowRight size={24} color={Colors.light.background} />}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderCompleteStep = () => (
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+      <View style={[styles.landmarkIconContainer, styles.completeIcon]}>
+        <Text style={styles.completeEmoji}>🎉</Text>
+      </View>
+      
+      <Text style={styles.stepTitle}>Tour Complete!</Text>
+      <Text style={styles.completeMessage}>
+        You&apos;ve visited all {tour.landmarks.length} landmarks on this tour. Great job!
+      </Text>
+      
+      <TouchableOpacity
+        style={styles.primaryButton}
+        activeOpacity={0.8}
+        onPress={handleCompleteTour}
+      >
+        <Text style={styles.primaryButtonText}>Finish</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
   return (
     <LinearGradient
-      colors={["#FFFFFF", "#D6EBFF"]}
+      colors={["#FFFFFF", "#F0F4F8"]}
       locations={[0, 1]}
       style={styles.container}
     >
@@ -436,11 +468,6 @@ export default function RouteNavigationScreen() {
               if (sound) {
                 sound.unloadAsync().catch(err => {
                   console.error("[RouteNav] Error unloading sound on close:", err);
-                });
-              }
-              if (recording) {
-                recording.stopAndUnloadAsync().catch(err => {
-                  console.error("[RouteNav] Error stopping recording on close:", err);
                 });
               }
               router.back();
@@ -468,216 +495,80 @@ export default function RouteNavigationScreen() {
           </Text>
         </View>
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View
-            style={[
-              styles.landmarkCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
-            <View style={styles.landmarkIconContainer}>
-              <MapPin size={32} color={Colors.light.primary} />
-            </View>
-            <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
-            {userLocation && distanceToLandmark && (
-              <View style={styles.distanceBadge}>
-                <NavigationIcon size={16} color={Colors.light.primary} />
-                <Text style={styles.distanceText}>{distanceToLandmark}</Text>
-              </View>
-            )}
-            <Text style={styles.landmarkDescription}>
-              {currentLandmark.description}
-            </Text>
-
-            <View style={styles.audioSection}>
-              <TouchableOpacity
-                style={styles.audioButton}
-                activeOpacity={0.8}
-                onPress={handlePlayAudio}
-              >
-                {isPlaying ? (
-                  <Pause size={24} color={Colors.light.background} fill={Colors.light.background} />
-                ) : (
-                  <Play size={24} color={Colors.light.background} fill={Colors.light.background} />
-                )}
-                <Text style={styles.audioButtonText}>
-                  {isPlaying ? "Pause Audio" : "Play Audio"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.navigationCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.directionsButton}
-              activeOpacity={0.8}
-              onPress={openInMaps}
-            >
-              <NavigationIcon size={20} color={Colors.light.primary} />
-              <Text style={styles.directionsButtonText}>Get Directions</Text>
-              <ArrowRight size={20} color={Colors.light.primary} />
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            <TouchableOpacity
-              style={styles.aiButton}
-              activeOpacity={0.8}
-              onPress={() => setShowAiModal(true)}
-            >
-              <MessageCircle size={20} color={Colors.light.primary} />
-              <Text style={styles.aiButtonText}>Ask a Question</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {tour.landmarks.length > currentLandmarkIndex + 1 && (
-            <Animated.View
-              style={[
-                styles.upcomingSection,
-                {
-                  opacity: fadeAnim,
-                },
-              ]}
-            >
-              <Text style={styles.upcomingTitle}>Up Next</Text>
-              {tour.landmarks
-                .slice(currentLandmarkIndex + 1, currentLandmarkIndex + 4)
-                .map((landmark: any, index: number) => (
-                  <View key={landmark.id} style={styles.upcomingItem}>
-                    <View style={styles.upcomingNumber}>
-                      <Text style={styles.upcomingNumberText}>
-                        {currentLandmarkIndex + index + 2}
-                      </Text>
-                    </View>
-                    <Text style={styles.upcomingName} numberOfLines={1}>
-                      {landmark.name}
-                    </Text>
-                  </View>
-                ))}
-            </Animated.View>
-          )}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.nextButton}
-            activeOpacity={0.8}
-            onPress={handleNextLandmark}
-          >
-            <Check size={24} color={Colors.light.background} />
-            <Text style={styles.nextButtonText}>
-              {isLastLandmark ? "Complete Tour" : "I've Arrived"}
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.content}>
+          {step === "navigate" && renderNavigateStep()}
+          {step === "arrived" && renderArrivedStep()}
+          {step === "listening" && renderListeningStep()}
+          {step === "complete" && renderCompleteStep()}
         </View>
       </SafeAreaView>
 
-      <Modal
-        visible={showAiModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAiModal(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalContainer}
-        >
+      {showAiQuestion && (
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
-            style={styles.modalOverlay}
+            style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setShowAiModal(false)}
+            onPress={() => setShowAiQuestion(false)}
           />
-          <View style={styles.modalContent}>
+          <Animated.View style={[styles.questionModal, { opacity: fadeAnim }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ask Your Tour Guide</Text>
-              <TouchableOpacity onPress={() => setShowAiModal(false)}>
+              <TouchableOpacity onPress={() => setShowAiQuestion(false)}>
                 <X size={24} color={Colors.light.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={styles.modalBodyContent}
-            >
-              {aiResponse ? (
-                <View style={styles.responseContainer}>
-                  <Text style={styles.responseLabel}>Answer:</Text>
-                  <Text style={styles.responseText}>{aiResponse}</Text>
+            {aiResponse ? (
+              <View style={styles.responseContainer}>
+                <Text style={styles.responseLabel}>Answer:</Text>
+                <Text style={styles.responseText}>{aiResponse}</Text>
+                <TouchableOpacity
+                  style={styles.askAnotherButton}
+                  onPress={() => {
+                    setAiResponse("");
+                  }}
+                >
+                  <Text style={styles.askAnotherButtonText}>Ask Another Question</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.questionInputContainer}>
+                <Text style={styles.inputLabel}>What would you like to know about {currentLandmark.name}?</Text>
+                <View style={styles.quickQuestions}>
                   <TouchableOpacity
-                    style={styles.askAnotherButton}
-                    onPress={() => {
-                      setAiResponse("");
-                      setAiQuestion("");
-                    }}
+                    style={styles.quickQuestionChip}
+                    onPress={() => handleAskQuestion("What's the history of this place?")}
+                    disabled={isLoadingAi}
                   >
-                    <Text style={styles.askAnotherButtonText}>Ask Another Question</Text>
+                    <Text style={styles.quickQuestionText}>History</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickQuestionChip}
+                    onPress={() => handleAskQuestion("What should I look for here?")}
+                    disabled={isLoadingAi}
+                  >
+                    <Text style={styles.quickQuestionText}>What to see</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickQuestionChip}
+                    onPress={() => handleAskQuestion("Tell me an interesting fact")}
+                    disabled={isLoadingAi}
+                  >
+                    <Text style={styles.quickQuestionText}>Fun fact</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>What would you like to know?</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Type your question here..."
-                    placeholderTextColor={Colors.light.textSecondary}
-                    value={aiQuestion}
-                    onChangeText={setAiQuestion}
-                    multiline
-                    numberOfLines={4}
-                    editable={!isLoadingAi}
-                  />
 
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={styles.voiceButton}
-                      onPress={isRecording ? stopRecording : startRecording}
-                      disabled={isLoadingAi}
-                    >
-                      <Mic
-                        size={24}
-                        color={isRecording ? Colors.light.error : Colors.light.background}
-                      />
-                      <Text style={styles.voiceButtonText}>
-                        {isRecording ? "Stop Recording" : "Use Voice"}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.sendButton,
-                        (!aiQuestion.trim() || isLoadingAi) && styles.sendButtonDisabled,
-                      ]}
-                      onPress={handleAskAi}
-                      disabled={!aiQuestion.trim() || isLoadingAi}
-                    >
-                      {isLoadingAi ? (
-                        <ActivityIndicator color={Colors.light.background} />
-                      ) : (
-                        <Send size={24} color={Colors.light.background} />
-                      )}
-                    </TouchableOpacity>
+                {isLoadingAi && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator color={Colors.light.primary} />
+                    <Text style={styles.loadingText}>Getting answer...</Text>
                   </View>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+                )}
+              </View>
+            )}
+          </Animated.View>
+        </View>
+      )}
     </LinearGradient>
   );
 }
@@ -734,78 +625,79 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  landmarkCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 28,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.light.shadow,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
+    paddingHorizontal: 24,
+  },
+  stepContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: 20,
   },
   landmarkIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: Colors.light.backgroundSecondary,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  completeIcon: {
+    backgroundColor: "#FEF3C7",
+  },
+  completeEmoji: {
+    fontSize: 48,
+  },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.light.textSecondary,
+    textAlign: "center",
   },
   landmarkName: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: "700",
     color: Colors.light.text,
     textAlign: "center",
-    marginBottom: 12,
+    lineHeight: 38,
   },
   distanceBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: Colors.light.backgroundSecondary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
   },
   distanceText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: Colors.light.primary,
   },
-  landmarkDescription: {
-    fontSize: 16,
+  landmarkSummary: {
+    fontSize: 17,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 24,
+    lineHeight: 26,
+    maxWidth: "90%",
   },
-  audioSection: {
+  buttonGroup: {
     width: "100%",
+    gap: 12,
+    marginTop: 12,
   },
-  audioButton: {
+  primaryButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
     backgroundColor: Colors.light.primary,
-    paddingVertical: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
     borderRadius: 16,
+    width: "100%",
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
@@ -814,66 +706,110 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
       },
       android: {
-        elevation: 4,
+        elevation: 6,
       },
     }),
   },
-  audioButtonText: {
-    fontSize: 17,
+  primaryButtonText: {
+    fontSize: 18,
     fontWeight: "700",
     color: Colors.light.background,
   },
-  navigationCard: {
+  secondaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
     backgroundColor: Colors.light.card,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 16,
-    padding: 4,
-    marginBottom: 20,
+    width: "100%",
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+  },
+  secondaryButtonText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: Colors.light.primary,
+  },
+  audioPlayer: {
+    alignItems: "center",
+    gap: 16,
+    paddingVertical: 20,
+  },
+  audioButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
     ...Platform.select({
       ios: {
-        shadowColor: Colors.light.shadow,
+        shadowColor: Colors.light.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.3,
         shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 6,
       },
     }),
   },
-  directionsButton: {
+  audioStatus: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.light.textSecondary,
+  },
+  questionButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
+    backgroundColor: Colors.light.card,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
-  directionsButtonText: {
+  questionButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: Colors.light.primary,
+  },
+  completeMessage: {
+    fontSize: 17,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    lineHeight: 26,
+    maxWidth: "85%",
+  },
+  errorContainer: {
     flex: 1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.light.border,
-    marginVertical: 4,
-  },
-  aiButton: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
+    backgroundColor: Colors.light.background,
+    padding: 20,
   },
-  aiButtonText: {
-    fontSize: 16,
+  errorText: {
+    fontSize: 18,
     fontWeight: "600",
-    color: Colors.light.primary,
-    flex: 1,
+    color: Colors.light.text,
+    marginBottom: 20,
+    textAlign: "center",
   },
-  modalContainer: {
-    flex: 1,
-    justifyContent: "flex-end",
+  backButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.light.background,
   },
   modalOverlay: {
     position: "absolute",
@@ -881,13 +817,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
-  modalContent: {
+  questionModal: {
     backgroundColor: Colors.light.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "85%",
+    paddingBottom: 40,
+    maxHeight: "80%",
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.shadow,
@@ -913,61 +858,48 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.light.text,
   },
-  modalBody: {
-    flex: 1,
-  },
-  modalBodyContent: {
+  questionInputContainer: {
     padding: 20,
-  },
-  inputContainer: {
     gap: 16,
   },
   inputLabel: {
     fontSize: 16,
     fontWeight: "600",
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  textInput: {
-    backgroundColor: Colors.light.backgroundSecondary,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: Colors.light.text,
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-  actionButtons: {
+  quickQuestions: {
     flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 10,
   },
-  voiceButton: {
-    flex: 1,
+  quickQuestionChip: {
+    backgroundColor: Colors.light.card,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+  },
+  quickQuestionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.light.text,
+  },
+  loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
+    gap: 12,
+    paddingVertical: 20,
   },
-  voiceButtonText: {
+  loadingText: {
     fontSize: 16,
     fontWeight: "600",
-    color: Colors.light.background,
-  },
-  sendButton: {
-    width: 56,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.light.primary,
-    borderRadius: 12,
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
+    color: Colors.light.textSecondary,
   },
   responseContainer: {
+    padding: 20,
     gap: 16,
   },
   responseLabel: {
@@ -992,113 +924,6 @@ const styles = StyleSheet.create({
   askAnotherButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: Colors.light.background,
-  },
-  upcomingSection: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 16,
-    padding: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.light.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  upcomingTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: Colors.light.text,
-    marginBottom: 16,
-  },
-  upcomingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-  },
-  upcomingNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.light.backgroundSecondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  upcomingNumberText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: Colors.light.text,
-  },
-  upcomingName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "600",
-    color: Colors.light.text,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  nextButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 18,
-    borderRadius: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.light.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  nextButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: Colors.light.background,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.light.background,
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: Colors.light.text,
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  backButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
     color: Colors.light.background,
   },
 });
