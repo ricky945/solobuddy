@@ -36,9 +36,6 @@ export default function ExploreScreen() {
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
-  const [hasInitialLoad, setHasInitialLoad] = useState<boolean>(false);
-  const [isDiscovering, setIsDiscovering] = useState<boolean>(false);
-  const [queryInput, setQueryInput] = useState<{ latitude: number; longitude: number; radius: number } | null>(null);
   const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
   
   const sheetY = useRef(new Animated.Value(MAP_HEIGHT)).current;
@@ -85,7 +82,7 @@ export default function ExploreScreen() {
     })
   ).current;
 
-  const globalLandmarksQuery = trpc.landmarks.getAll.useQuery(
+  const landmarksQuery = trpc.landmarks.getAll.useQuery(
     {
       latitude: location?.coords.latitude,
       longitude: location?.coords.longitude,
@@ -94,88 +91,22 @@ export default function ExploreScreen() {
     {
       enabled: !!location,
       refetchOnWindowFocus: false,
-      refetchOnMount: true,
-      retry: 0,
-      retryDelay: 0,
-    }
-  );
-  
-  const discoverLandmarksQuery = trpc.landmarks.discover.useQuery(
-    queryInput!,
-    {
-      enabled: !!queryInput,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      retry: 0,
-      retryDelay: 0,
+      staleTime: 30000,
     }
   );
 
   useEffect(() => {
-    if (globalLandmarksQuery.data) {
-      console.log("[Explore] Global landmarks loaded:", globalLandmarksQuery.data.landmarks?.length || 0);
-      setLandmarks(globalLandmarksQuery.data.landmarks || []);
-      setHasInitialLoad(true);
+    if (landmarksQuery.data) {
+      console.log("[Explore] Landmarks loaded:", landmarksQuery.data.landmarks?.length || 0);
+      setLandmarks(landmarksQuery.data.landmarks || []);
     }
-  }, [globalLandmarksQuery.data]);
-  
-  useEffect(() => {
-    if (globalLandmarksQuery.error) {
-      console.log("[Explore] Global landmarks query error (suppressed):", globalLandmarksQuery.error.message);
-      setHasInitialLoad(true);
-    }
-  }, [globalLandmarksQuery.error]);
-  
-  useEffect(() => {
-    if (discoverLandmarksQuery.data) {
-      console.log("[Explore] Landmarks discovered:", discoverLandmarksQuery.data.landmarks?.length || 0);
-      const rawLandmarks = discoverLandmarksQuery.data.landmarks || [];
-      const discoveredLandmarks = rawLandmarks.map((landmark: any) => ({
-        ...landmark,
-        createdBy: "ai-generated",
-        createdByName: "AI Generated",
-        upvotes: 0,
-        upvotedBy: [],
-        reviews: [],
-      }));
-      setLandmarks(discoveredLandmarks);
-      setHasInitialLoad(true);
-      setIsDiscovering(false);
-    }
-  }, [discoverLandmarksQuery.data]);
-
-  useEffect(() => {
-    if (discoverLandmarksQuery.error) {
-      console.error("[Explore] Failed to discover landmarks:", discoverLandmarksQuery.error);
-      const errorMessage = discoverLandmarksQuery.error.message || "Failed to discover landmarks. Please try again.";
-      
-      if (!errorMessage.includes("Backend") && 
-          !errorMessage.includes("unavailable") && 
-          !errorMessage.includes("Network request failed")) {
-        Alert.alert("Discovery Error", errorMessage);
-      }
-      
-      setLandmarks([]);
-      setHasInitialLoad(true);
-      setIsDiscovering(false);
-    }
-  }, [discoverLandmarksQuery.error]);
+  }, [landmarksQuery.data]);
 
   useEffect(() => {
     getLocationAsync();
   }, []);
 
-  useEffect(() => {
-    if (location && !hasInitialLoad) {
-      console.log("[Explore] Fetching landmarks for current location");
-      setIsDiscovering(true);
-      setQueryInput({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        radius: 2,
-      });
-    }
-  }, [location, hasInitialLoad]);
+
 
 
 
@@ -258,7 +189,7 @@ export default function ExploreScreen() {
   const handleAddLandmark = (landmark: MapLandmark) => {
     console.log("[Explore] Adding user landmark:", landmark);
     setLandmarks([...landmarks, landmark]);
-    globalLandmarksQuery.refetch();
+    landmarksQuery.refetch();
   };
 
   const getMarkerColor = (type: string) => {
@@ -375,12 +306,12 @@ export default function ExploreScreen() {
           ))}
         </MapView>
 
-        {isDiscovering && (
+        {landmarksQuery.isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingCard}>
               <ActivityIndicator size="small" color={Colors.light.primary} />
               <Text style={styles.loadingOverlayText}>
-                Discovering landmarks...
+                Loading landmarks...
               </Text>
             </View>
           </View>
@@ -443,10 +374,10 @@ export default function ExploreScreen() {
             {filteredLandmarks.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
-                  No landmarks nearby
+                  No landmarks found
                 </Text>
                 <Text style={styles.emptySubtext}>
-                  Pull down the map to refresh or add your own landmarks
+                  Be the first to add a landmark in this area!
                 </Text>
               </View>
             ) : (
