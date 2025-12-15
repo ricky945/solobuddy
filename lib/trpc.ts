@@ -69,7 +69,7 @@ async function fetchWithRetry(
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/trpc`,
+      url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
         console.log("[tRPC] Making request to:", url);
