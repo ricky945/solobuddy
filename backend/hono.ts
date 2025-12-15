@@ -24,7 +24,7 @@ app.get("/", (c) => {
   });
 });
 
-app.get("/api/health", (c) => {
+app.get("/health", (c) => {
   return c.json({ 
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -45,7 +45,7 @@ app.get("/api/health", (c) => {
   });
 });
 
-app.use("/api/trpc/*", async (c, next) => {
+app.use("/trpc/*", async (c, next) => {
   const startTime = Date.now();
   const path = new URL(c.req.url).pathname;
   console.log(`[Hono] ${c.req.method} ${path}`);
@@ -61,7 +61,7 @@ app.use("/api/trpc/*", async (c, next) => {
 });
 
 app.use(
-  "/api/trpc/*",
+  "/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,
