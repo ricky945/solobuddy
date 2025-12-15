@@ -571,7 +571,7 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
 
   return (
     <LinearGradient
-      colors={["#FFFFFF", "#D6EBFF"]}
+      colors={["#FAFBFC", "#F0F4F8"]}
       locations={[0, 1]}
       style={styles.container}
     >
@@ -617,17 +617,18 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: Colors.light.text,
     textAlign: "center",
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    paddingHorizontal: 20,
-    lineHeight: 24,
+    paddingHorizontal: 24,
+    lineHeight: 22,
   },
   buttonContainer: {
     width: "100%",
@@ -638,44 +639,46 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 10,
     backgroundColor: Colors.light.primary,
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 32,
-    borderRadius: 16,
+    borderRadius: 14,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
   primaryButtonText: {
     color: Colors.light.background,
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   secondaryButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 10,
     backgroundColor: Colors.light.card,
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 32,
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: Colors.light.border,
   },
   secondaryButtonText: {
     color: Colors.light.primary,
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   previewContainer: {
     flex: 1,
@@ -685,18 +688,20 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: "100%",
     aspectRatio: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.shadow,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 4,
       },
     }),
   },

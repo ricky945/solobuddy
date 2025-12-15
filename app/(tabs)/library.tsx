@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: "#FAFBFC",
   },
   safeArea: {
     flex: 1,
@@ -316,10 +316,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.light.text,
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.light.textSecondary,
+    fontWeight: "500",
   },
   scrollView: {
     flex: 1,
@@ -346,17 +348,19 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.shadow,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
+        shadowOpacity: 0.06,
         shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
@@ -413,6 +417,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.light.text,
     marginRight: 8,
+    letterSpacing: -0.2,
   },
   playButton: {
     padding: 4,

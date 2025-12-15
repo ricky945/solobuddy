@@ -4,21 +4,21 @@ const accentColor = "#42A5F5";
 
 export default {
   light: {
-    text: "#1A1A1A",
-    textSecondary: "#6B6B6B",
+    text: "#0F1419",
+    textSecondary: "#536471",
     background: "#FFFFFF",
-    backgroundSecondary: "#F8F9FA",
+    backgroundSecondary: "#F7F9FA",
     tint: primaryColor,
     primary: primaryColor,
     secondary: secondaryColor,
     accent: accentColor,
-    border: "#E5E5E5",
+    border: "#E7ECF0",
     success: "#34C759",
     error: "#FF3B30",
     warning: "#FF9500",
     tabIconDefault: "#8E8E93",
     tabIconSelected: primaryColor,
     card: "#FFFFFF",
-    shadow: "rgba(0, 0, 0, 0.1)",
+    shadow: "rgba(0, 0, 0, 0.08)",
   },
 };
