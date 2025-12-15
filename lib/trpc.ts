@@ -115,14 +115,20 @@ export const trpcClient = trpc.createClient({
           
           return response;
         } catch (error) {
-          console.error('[tRPC] Request error - Full details:', {
-            error,
+          const errorDetails = {
             message: error instanceof Error ? error.message : String(error),
             name: error instanceof Error ? error.name : typeof error,
             stack: error instanceof Error ? error.stack : undefined,
-          });
+            raw: error,
+          };
           
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('[tRPC] Request error - Full details:', JSON.stringify(errorDetails, null, 2));
+          
+          const errorMessage = error instanceof Error ? error.message : (
+            typeof error === 'object' && error !== null && 'message' in error 
+              ? String((error as any).message)
+              : JSON.stringify(error)
+          );
           console.error('[tRPC] Request error:', errorMessage);
           
           if (isNetworkError(error)) {
