@@ -148,7 +148,7 @@ export default function ExploreScreen() {
       const error = discoverQuery.error;
       const errorMsg = getErrorMessage(error);
       console.error("[Explore] Failed to discover landmarks:", errorMsg);
-      console.error("[Explore] Error object:", error);
+      console.error("[Explore] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     }
   }, [discoverQuery.isError, discoverQuery.error]);
 
