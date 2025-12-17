@@ -46,7 +46,7 @@ import {
 import { Topic, AudioLength, TransportMethod, AudioGuide } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
-import { generateTTS } from "@/lib/tts-client";
+import { trpc } from "@/lib/trpc";
 
 const iconMap = {
   BookOpen,
@@ -75,6 +75,8 @@ export default function ExploreScreen() {
   const [transportMethod, setTransportMethod] = useState<TransportMethod>("walking");
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
   const [generationProgress, setGenerationProgress] = useState<string>("");
+  
+  const generateTTSMutation = trpc.tts.generate.useMutation();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -493,7 +495,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           setGenerationProgress(`Generating audio (${i + 1}/${chunks.length})...`);
           console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
           
-          const ttsResult = await generateTTS({
+          const ttsResult = await generateTTSMutation.mutateAsync({
             text: chunks[i],
             voice: "alloy",
             speed: 1.0,

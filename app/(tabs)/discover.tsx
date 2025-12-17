@@ -20,7 +20,7 @@ import { Audio } from "expo-av";
 import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
-import { generateTTS } from "@/lib/tts-client";
+import { trpc } from "@/lib/trpc";
 
 type ViewMode = "text" | "audio";
 
@@ -34,6 +34,8 @@ export default function DiscoverScreen() {
   const [locationInfo, setLocationInfo] = useState<string | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  
+  const generateTTSMutation = trpc.tts.generate.useMutation();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -313,7 +315,7 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
     console.log("[Discover] Generating audio...");
 
     try {
-      const ttsResult = await generateTTS({
+      const ttsResult = await generateTTSMutation.mutateAsync({
         text: analysisResult,
         voice: "alloy",
         speed: 1.0,
