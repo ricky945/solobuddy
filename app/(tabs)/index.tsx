@@ -10,7 +10,6 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
-  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
@@ -31,6 +30,9 @@ import {
   Navigation,
   X,
   ChevronLeft,
+  Sparkles,
+  Globe,
+  Star,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -47,6 +49,8 @@ import { Topic, AudioLength, TransportMethod, AudioGuide } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import { generateTTS } from "@/lib/tts-client";
+
+
 
 const iconMap = {
   BookOpen,
@@ -77,22 +81,64 @@ export default function ExploreScreen() {
   const [generationProgress, setGenerationProgress] = useState<string>("");
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-  }, [flowStep, fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowStep]);
+
+  useEffect(() => {
+    if (flowStep === 'welcome') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.08,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowStep]);
 
   const goToNextStep = (step: FlowStep) => {
     fadeAnim.setValue(0);
+    slideAnim.setValue(50);
+    scaleAnim.setValue(0.95);
     setFlowStep(step);
   };
 
   const goToPreviousStep = () => {
     fadeAnim.setValue(0);
+    slideAnim.setValue(50);
+    scaleAnim.setValue(0.95);
     switch (flowStep) {
       case "tourType":
         setFlowStep("welcome");
@@ -685,50 +731,135 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
   };
 
   const renderWelcome = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Image 
-        source={{ uri: "https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/laveu4s1oij0t2h4rsl79" }} 
-        style={styles.welcomeImage}
-        resizeMode="contain"
-      />
-      <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
-      <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
+    <Animated.View style={[
+      styles.centeredContainer, 
+      { 
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+      }
+    ]}>
+      <Animated.View style={[styles.heroContainer, { transform: [{ scale: pulseAnim }] }]}>
+        <LinearGradient
+          colors={['rgba(59, 130, 246, 0.15)', 'rgba(147, 51, 234, 0.15)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
+        >
+          <Globe size={72} color={Colors.light.primary} strokeWidth={1.5} />
+        </LinearGradient>
+      </Animated.View>
+      
+      <View style={styles.welcomeTextContainer}>
+        <Text style={styles.welcomeTitle}>Explore the World{"\n"}Your Way</Text>
+        <Text style={styles.welcomeSubtitle}>AI-powered audio tours crafted from verified sources. Choose your interests, set your pace, discover your adventure.</Text>
+      </View>
+
+      <View style={styles.featuresList}>
+        <View style={styles.featureItem}>
+          <View style={styles.featureIconContainer}>
+            <Sparkles size={18} color={Colors.light.primary} strokeWidth={2} />
+          </View>
+          <Text style={styles.featureText}>Personalized content</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <View style={styles.featureIconContainer}>
+            <Star size={18} color={Colors.light.primary} strokeWidth={2} />
+          </View>
+          <Text style={styles.featureText}>Expert narration</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <View style={styles.featureIconContainer}>
+            <Route size={18} color={Colors.light.primary} strokeWidth={2} />
+          </View>
+          <Text style={styles.featureText}>Smart routing</Text>
+        </View>
+      </View>
+
       <TouchableOpacity
         style={styles.ctaButton}
         activeOpacity={0.85}
         onPress={() => goToNextStep("tourType")}
       >
-        <Text style={styles.ctaButtonText}>Create Tour Now</Text>
+        <LinearGradient
+          colors={[Colors.light.primary, '#8B5CF6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ctaGradient}
+        >
+          <Text style={styles.ctaButtonText}>Start Creating</Text>
+          <ChevronLeft size={20} color="#FFFFFF" style={{ transform: [{ rotate: '180deg' }] }} />
+        </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
   );
 
   const renderTourType = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Do you want to:</Text>
+    <Animated.View style={[
+      styles.centeredContainer, 
+      { 
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+      }
+    ]}>
+      <View style={styles.stepHeader}>
+        <View style={styles.progressDots}>
+          <View style={[styles.dot, styles.dotActive]} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
+        </View>
+        <Text style={styles.questionTitle}>Choose Your Experience</Text>
+        <Text style={styles.questionSubtitle}>How would you like to explore?</Text>
+      </View>
+
       <View style={styles.optionsVertical}>
         <TouchableOpacity
-          style={styles.fullOptionCard}
+          style={styles.modernOptionCard}
           activeOpacity={0.85}
           onPress={() => handleTourTypeSelection("route")}
         >
-          <View style={styles.fullOptionIcon}>
-            <Route size={32} color={Colors.light.primary} />
-          </View>
-          <Text style={styles.fullOptionTitle}>Walk Around Landmarks</Text>
-          <Text style={styles.fullOptionSubtitle}>With a custom path</Text>
+          <LinearGradient
+            colors={['#3B82F6', '#2563EB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.optionGradient}
+          >
+            <View style={styles.optionContent}>
+              <View style={styles.optionIconLarge}>
+                <Route size={36} color="#FFFFFF" strokeWidth={2} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={styles.optionTitleLarge}>Guided Route</Text>
+                <Text style={styles.optionDescriptionLarge}>Follow a custom path through landmarks with turn-by-turn navigation</Text>
+              </View>
+            </View>
+            <View style={styles.optionBadge}>
+              <Text style={styles.optionBadgeText}>Popular</Text>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.fullOptionCard}
+          style={styles.modernOptionCard}
           activeOpacity={0.85}
           onPress={() => handleTourTypeSelection("immersive")}
         >
-          <View style={styles.fullOptionIcon}>
-            <Headphones size={32} color={Colors.light.secondary} />
-          </View>
-          <Text style={styles.fullOptionTitle}>Listen While Doing</Text>
-          <Text style={styles.fullOptionSubtitle}>Something else</Text>
+          <LinearGradient
+            colors={['#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.optionGradient}
+          >
+            <View style={styles.optionContent}>
+              <View style={styles.optionIconLarge}>
+                <Headphones size={36} color="#FFFFFF" strokeWidth={2} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={styles.optionTitleLarge}>Immersive Audio</Text>
+                <Text style={styles.optionDescriptionLarge}>Listen and learn while relaxing, commuting, or doing other activities</Text>
+              </View>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -1307,5 +1438,138 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: Colors.light.text,
+  },
+  heroContainer: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    marginBottom: 16,
+    overflow: 'hidden' as const,
+  },
+  heroGradient: {
+    flex: 1,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  welcomeTextContainer: {
+    alignItems: 'center' as const,
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  featuresList: {
+    flexDirection: 'row' as const,
+    gap: 16,
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  featureItem: {
+    flex: 1,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  featureIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  featureText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.light.text,
+    textAlign: 'center' as const,
+  },
+  ctaGradient: {
+    width: '100%',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 14,
+  },
+  stepHeader: {
+    alignItems: 'center' as const,
+    gap: 16,
+    marginBottom: 12,
+  },
+  progressDots: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginBottom: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.border,
+  },
+  dotActive: {
+    backgroundColor: Colors.light.primary,
+    width: 24,
+  },
+  modernOptionCard: {
+    borderRadius: 20,
+    overflow: 'hidden' as const,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  optionGradient: {
+    padding: 24,
+    minHeight: 140,
+    justifyContent: 'space-between' as const,
+  },
+  optionContent: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 16,
+  },
+  optionIconLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionTitleLarge: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    letterSpacing: -0.4,
+  },
+  optionDescriptionLarge: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
+  },
+  optionBadge: {
+    alignSelf: 'flex-start' as const,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  optionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#FFFFFF',
   },
 });
