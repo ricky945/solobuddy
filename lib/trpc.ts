@@ -34,8 +34,18 @@ function serializeError(error: unknown): string {
   if (typeof error === 'object') {
     const errorObj = error as any;
     
-    if (errorObj.message && typeof errorObj.message === 'string') {
-      return errorObj.message;
+    if (errorObj.message) {
+      if (typeof errorObj.message === 'string') {
+        return errorObj.message;
+      }
+      if (typeof errorObj.message === 'object') {
+        try {
+          const msgStr = JSON.stringify(errorObj.message);
+          if (msgStr && msgStr !== '{}' && msgStr !== 'null') {
+            return msgStr;
+          }
+        } catch {}
+      }
     }
     
     if (errorObj.data?.message && typeof errorObj.data.message === 'string') {
@@ -47,18 +57,47 @@ function serializeError(error: unknown): string {
     }
     
     try {
-      const cleanError: any = {};
-      if (errorObj.message) cleanError.message = String(errorObj.message);
-      if (errorObj.code) cleanError.code = String(errorObj.code);
-      if (errorObj.data) cleanError.data = errorObj.data;
+      const safeStringify = (obj: any): string => {
+        const seen = new WeakSet();
+        return JSON.stringify(obj, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
+          }
+          if (typeof value === 'function') {
+            return '[Function]';
+          }
+          if (typeof value === 'symbol') {
+            return value.toString();
+          }
+          if (value instanceof Error) {
+            return value.message;
+          }
+          return value;
+        });
+      };
       
-      const json = JSON.stringify(cleanError, null, 2);
+      const json = safeStringify({
+        message: errorObj.message,
+        code: errorObj.code,
+        data: errorObj.data,
+      });
+      
       if (json && json !== '{}' && json !== 'null') {
         const parsed = JSON.parse(json);
-        if (parsed.message) return String(parsed.message);
+        if (parsed.message && typeof parsed.message === 'string') {
+          return parsed.message;
+        }
+        if (parsed.data?.message && typeof parsed.data.message === 'string') {
+          return parsed.data.message;
+        }
         return json;
       }
-    } catch {}
+    } catch (e) {
+      console.error('[tRPC] Error during serialization:', e);
+    }
   }
   
   try {
