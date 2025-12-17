@@ -145,17 +145,22 @@ async function fetchWithRetry(
 ): Promise<Response> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
     
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal,
+      signal: options?.signal || controller.signal,
     });
     
     clearTimeout(timeoutId);
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[tRPC] Fetch attempt ${retryCount + 1} failed:`, error);
+    
+    const isAborted = error?.name === 'AbortError' || error?.message?.includes('Aborted');
+    if (isAborted) {
+      throw new Error('Request timed out. The operation took too long. Please try again with a shorter request.');
+    }
     
     if (retryCount < MAX_RETRIES && isNetworkError(error)) {
       const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
