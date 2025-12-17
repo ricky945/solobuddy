@@ -170,20 +170,41 @@ export default publicProcedure
         source: "google_places" as const,
       };
     } catch (error: any) {
-      const errorMessage = getErrorMessage(error);
-      console.error("[Landmarks] Error:", errorMessage);
-      console.error("[Landmarks] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-
+      console.error("[Landmarks] Caught error:", error);
+      
       if (error instanceof TRPCError) {
+        console.error("[Landmarks] TRPCError:", error.message);
         throw error;
       }
 
-      if (error?.name === 'AbortError') {
-        throw new TRPCError({
-          code: "TIMEOUT",
-          message: "Request timed out. Please check your connection and try again.",
-        });
+      let errorMessage = "Failed to discover landmarks. Please try again.";
+      
+      try {
+        if (error?.name === 'AbortError') {
+          throw new TRPCError({
+            code: "TIMEOUT",
+            message: "Request timed out. Please check your connection and try again.",
+          });
+        }
+
+        if (error && typeof error === 'object') {
+          if (typeof error.message === 'string' && error.message) {
+            errorMessage = error.message;
+          } else if (error.message && typeof error.message === 'object') {
+            try {
+              errorMessage = JSON.stringify(error.message);
+            } catch {
+              errorMessage = String(error.message);
+            }
+          }
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+      } catch (parseError) {
+        console.error("[Landmarks] Error parsing error:", parseError);
       }
+
+      console.error("[Landmarks] Final error message:", errorMessage);
 
       const isNetworkError = 
         errorMessage.toLowerCase().includes('network') ||
@@ -200,56 +221,7 @@ export default publicProcedure
     }
   });
 
-function getErrorMessage(error: unknown): string {
-  if (!error) return "An unexpected error occurred";
-  
-  if (typeof error === 'string') return error;
-  
-  if (error instanceof Error) {
-    const msg = error.message;
-    if (typeof msg === 'string') return msg || "Unknown error occurred";
-    try {
-      return JSON.stringify(msg);
-    } catch {
-      return String(msg);
-    }
-  }
-  
-  if (typeof error === 'object') {
-    const errorObj = error as any;
-    
-    if (errorObj.message) {
-      if (typeof errorObj.message === 'string') {
-        return errorObj.message;
-      }
-      if (typeof errorObj.message === 'object') {
-        try {
-          return JSON.stringify(errorObj.message);
-        } catch {
-          return String(errorObj.message);
-        }
-      }
-    }
-    
-    try {
-      const json = JSON.stringify(errorObj, (key, val) => {
-        if (val instanceof Error) return val.message || val.toString();
-        if (typeof val === 'function') return undefined;
-        if (typeof val === 'symbol') return val.toString();
-        return val;
-      });
-      if (json && json !== '{}' && json !== 'null') {
-        return `Error: ${json.substring(0, 200)}`;
-      }
-    } catch {}
-    
-    try {
-      return String(error);
-    } catch {}
-  }
-  
-  return "Failed to discover landmarks. Please try again.";
-}
+
 
 function getCategoryFromTypes(
   types: string[]
