@@ -23,18 +23,27 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
 function serializeError(error: unknown): string {
+  console.log('[tRPC] Serializing error:', error);
+  console.log('[tRPC] Error type:', typeof error);
+  
   if (!error) return 'An unexpected error occurred';
   
-  if (typeof error === 'string') return error;
+  if (typeof error === 'string') {
+    console.log('[tRPC] Error is string:', error);
+    return error;
+  }
   
   if (error instanceof Error) {
+    console.log('[tRPC] Error is Error instance:', error.message);
     return error.message || 'Unknown error occurred';
   }
   
   if (typeof error === 'object') {
     const errorObj = error as any;
+    console.log('[tRPC] Error object keys:', Object.keys(errorObj));
     
     if (errorObj.message) {
+      console.log('[tRPC] Has message:', errorObj.message, 'type:', typeof errorObj.message);
       if (typeof errorObj.message === 'string') {
         return errorObj.message;
       }
@@ -49,10 +58,12 @@ function serializeError(error: unknown): string {
     }
     
     if (errorObj.data?.message && typeof errorObj.data.message === 'string') {
+      console.log('[tRPC] Has data.message:', errorObj.data.message);
       return errorObj.data.message;
     }
     
     if (errorObj.shape?.message && typeof errorObj.shape.message === 'string') {
+      console.log('[tRPC] Has shape.message:', errorObj.shape.message);
       return errorObj.shape.message;
     }
     
@@ -79,11 +90,8 @@ function serializeError(error: unknown): string {
         });
       };
       
-      const json = safeStringify({
-        message: errorObj.message,
-        code: errorObj.code,
-        data: errorObj.data,
-      });
+      const json = safeStringify(errorObj);
+      console.log('[tRPC] Stringified error:', json.substring(0, 200));
       
       if (json && json !== '{}' && json !== 'null') {
         const parsed = JSON.parse(json);
@@ -93,7 +101,7 @@ function serializeError(error: unknown): string {
         if (parsed.data?.message && typeof parsed.data.message === 'string') {
           return parsed.data.message;
         }
-        return json;
+        return `Error: ${json.substring(0, 100)}`;
       }
     } catch (e) {
       console.error('[tRPC] Error during serialization:', e);
@@ -101,7 +109,11 @@ function serializeError(error: unknown): string {
   }
   
   try {
-    return String(error);
+    const str = String(error);
+    console.log('[tRPC] String conversion:', str);
+    if (str && str !== '[object Object]') {
+      return str;
+    }
   } catch {}
   
   return 'An unexpected error occurred. Please try again.';

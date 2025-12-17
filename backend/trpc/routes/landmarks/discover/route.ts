@@ -33,18 +33,23 @@ export default publicProcedure
   .query(async ({ input }) => {
     try {
       const apiKey = (
-        process.env.GOOGLE_PLACES_API_KEY ||
         process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ||
+        process.env.GOOGLE_PLACES_API_KEY ||
         ""
       ).toString().trim();
 
       console.log("[Landmarks] Discovering landmarks via Google Places:", input);
+      console.log("[Landmarks] API Key available:", apiKey ? `Yes (${apiKey.substring(0, 8)}...)` : "No");
 
       if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
         console.error("[Landmarks] Google Places API key not configured");
+        console.error("[Landmarks] Checked vars:", {
+          EXPO_PUBLIC: !!process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
+          GOOGLE_PLACES: !!process.env.GOOGLE_PLACES_API_KEY
+        });
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Google Places API key not configured.",
+          message: "Google Places API key not configured. Please add EXPO_PUBLIC_GOOGLE_PLACES_API_KEY to environment variables.",
         });
       }
 
@@ -101,9 +106,10 @@ export default publicProcedure
         let errorDetails = null;
         try {
           const responseText = await response.text();
+          console.error("[Landmarks] Response text:", responseText.substring(0, 200));
           try {
             errorDetails = JSON.parse(responseText);
-            errorText = errorDetails.error?.message || responseText;
+            errorText = errorDetails.error?.message || errorDetails.message || responseText;
           } catch {
             errorText = responseText;
           }
@@ -117,13 +123,18 @@ export default publicProcedure
                          response.status === 403 ? "FORBIDDEN" :
                          "BAD_REQUEST";
 
+        const userMessage = response.status === 429 
+          ? "Rate limit exceeded. Please try again in a moment."
+          : response.status >= 500
+          ? "Google Places service is temporarily unavailable. Please try again."
+          : response.status === 403
+          ? "Google Places API key is invalid or restricted. Please check your API key configuration."
+          : `Google Places error (${response.status}): ${String(errorText).substring(0, 150)}`;
+
+        console.error("[Landmarks] Throwing error:", userMessage);
         throw new TRPCError({
           code: errorCode,
-          message: response.status === 429 
-            ? "Rate limit exceeded. Please try again in a moment."
-            : response.status >= 500
-            ? "Google Places service is temporarily unavailable. Please try again."
-            : `Google Places error (${response.status}): ${errorText.substring(0, 150)}`,
+          message: userMessage,
         });
       }
 
@@ -171,9 +182,11 @@ export default publicProcedure
       };
     } catch (error: any) {
       console.error("[Landmarks] Caught error:", error);
+      console.error("[Landmarks] Error type:", typeof error);
+      console.error("[Landmarks] Error instanceof TRPCError:", error instanceof TRPCError);
       
       if (error instanceof TRPCError) {
-        console.error("[Landmarks] TRPCError:", error.message);
+        console.error("[Landmarks] Re-throwing TRPCError:", error.message);
         throw error;
       }
 
@@ -181,6 +194,7 @@ export default publicProcedure
       
       try {
         if (error?.name === 'AbortError') {
+          console.error("[Landmarks] Request aborted/timed out");
           throw new TRPCError({
             code: "TIMEOUT",
             message: "Request timed out. Please check your connection and try again.",
@@ -196,15 +210,22 @@ export default publicProcedure
             } catch {
               errorMessage = String(error.message);
             }
+          } else {
+            try {
+              errorMessage = JSON.stringify(error);
+            } catch {
+              errorMessage = "Unknown error occurred";
+            }
           }
         } else if (typeof error === 'string') {
           errorMessage = error;
         }
       } catch (parseError) {
         console.error("[Landmarks] Error parsing error:", parseError);
+        errorMessage = "Failed to parse error details";
       }
 
-      console.error("[Landmarks] Final error message:", errorMessage);
+      console.error("[Landmarks] Final error message to user:", errorMessage);
 
       const isNetworkError = 
         errorMessage.toLowerCase().includes('network') ||
@@ -212,11 +233,14 @@ export default publicProcedure
         error?.code === 'ECONNREFUSED' ||
         error?.code === 'ETIMEDOUT';
 
+      const finalMessage = isNetworkError 
+        ? "Network error. Please check your internet connection."
+        : errorMessage;
+
+      console.error("[Landmarks] Throwing final TRPCError:", finalMessage);
       throw new TRPCError({
         code: isNetworkError ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
-        message: isNetworkError 
-          ? "Network error. Please check your internet connection."
-          : errorMessage,
+        message: finalMessage,
       });
     }
   });

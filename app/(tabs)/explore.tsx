@@ -99,48 +99,83 @@ export default function ExploreScreen() {
   );
 
   const getErrorMessage = (error: any): string => {
+    console.log('[Explore] Getting error message from:', error);
+    console.log('[Explore] Error type:', typeof error);
+    console.log('[Explore] Error keys:', error ? Object.keys(error) : 'null');
+    
     if (!error) return "An unexpected error occurred";
     
-    if (typeof error === 'string') return error;
+    if (typeof error === 'string') {
+      console.log('[Explore] Error is string:', error);
+      return error;
+    }
     
-    if (error.message) {
-      if (typeof error.message === 'string') {
-        return error.message;
-      }
-      try {
-        return JSON.stringify(error.message);
-      } catch {
-        return String(error.message);
-      }
+    if (error.message && typeof error.message === 'string') {
+      console.log('[Explore] Using error.message:', error.message);
+      return error.message;
     }
     
     if (error.data?.message && typeof error.data.message === 'string') {
+      console.log('[Explore] Using error.data.message:', error.data.message);
       return error.data.message;
     }
-    
-    if (error.data?.code) {
-      return `Error code: ${error.data.code}`;
+
+    if (error.shape?.data?.message && typeof error.shape.data.message === 'string') {
+      console.log('[Explore] Using error.shape.data.message:', error.shape.data.message);
+      return error.shape.data.message;
     }
     
     if (error.shape?.message && typeof error.shape.message === 'string') {
+      console.log('[Explore] Using error.shape.message:', error.shape.message);
       return error.shape.message;
     }
     
-    try {
-      const str = JSON.stringify(error, (key, val) => {
-        if (val instanceof Error) return val.message || val.toString();
-        if (typeof val === 'function') return undefined;
-        if (typeof val === 'symbol') return val.toString();
-        return val;
-      });
-      if (str && str !== '{}' && str !== 'null') return `Error: ${str.substring(0, 100)}`;
-    } catch {}
+    if (error.data?.code) {
+      console.log('[Explore] Using error code:', error.data.code);
+      return `Error code: ${error.data.code}`;
+    }
     
     try {
-      return String(error);
+      const safeStringify = (obj: any): string => {
+        const seen = new WeakSet();
+        return JSON.stringify(obj, (key, val) => {
+          if (typeof val === 'object' && val !== null) {
+            if (seen.has(val)) return '[Circular]';
+            seen.add(val);
+          }
+          if (val instanceof Error) return { message: val.message, name: val.name };
+          if (typeof val === 'function') return undefined;
+          if (typeof val === 'symbol') return val.toString();
+          return val;
+        }, 2);
+      };
+      
+      const str = safeStringify(error);
+      console.log('[Explore] Stringified error:', str.substring(0, 300));
+      
+      if (str && str !== '{}' && str !== 'null') {
+        const parsed = JSON.parse(str);
+        if (parsed.message && typeof parsed.message === 'string') {
+          return parsed.message;
+        }
+        if (parsed.data?.message) {
+          return String(parsed.data.message);
+        }
+        return `Error: ${str.substring(0, 100)}`;
+      }
+    } catch (e) {
+      console.error('[Explore] Error during stringify:', e);
+    }
+    
+    try {
+      const str = String(error);
+      console.log('[Explore] String conversion result:', str);
+      if (str && str !== '[object Object]') {
+        return str;
+      }
     } catch {}
     
-    return "An unexpected error occurred. Please try again.";
+    return "Failed to load landmarks. Please check your internet connection and try again.";
   };
 
   useEffect(() => {
