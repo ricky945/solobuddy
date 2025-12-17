@@ -109,6 +109,13 @@ export const [ToursProvider, useTours] = createContextHook(() => {
     console.log("[ToursContext] Adding tour:", tour.id, tour.title);
     const currentTours = toursQuery.data || [];
     console.log("[ToursContext] Current tours count:", currentTours.length);
+    
+    if (!tour.thumbnailUrl && tour.location) {
+      const locationQuery = encodeURIComponent(tour.location);
+      tour.thumbnailUrl = `https://source.unsplash.com/800x600/?${locationQuery},landmark,city`;
+      console.log("[ToursContext] Auto-generated thumbnail URL:", tour.thumbnailUrl);
+    }
+    
     const updatedTours = [tour, ...currentTours];
     console.log("[ToursContext] Updated tours count:", updatedTours.length);
     await saveToursMutation.mutateAsync(updatedTours);
