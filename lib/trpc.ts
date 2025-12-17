@@ -28,14 +28,32 @@ function serializeError(error: unknown): string {
   if (typeof error === 'string') return error;
   
   if (error instanceof Error) {
-    return error.message || 'Unknown error occurred';
+    const msg = error.message;
+    if (typeof msg === 'string') return msg || 'Unknown error occurred';
+    if (typeof msg === 'object') {
+      try {
+        return JSON.stringify(msg);
+      } catch {
+        return String(msg);
+      }
+    }
+    return String(msg);
   }
   
   if (typeof error === 'object') {
     const errorObj = error as any;
     
-    if (errorObj.message && typeof errorObj.message === 'string') {
-      return errorObj.message;
+    if (errorObj.message) {
+      if (typeof errorObj.message === 'string') {
+        return errorObj.message;
+      }
+      if (typeof errorObj.message === 'object') {
+        try {
+          return JSON.stringify(errorObj.message);
+        } catch {
+          return String(errorObj.message);
+        }
+      }
     }
     
     if (errorObj.data?.message && typeof errorObj.data.message === 'string') {
@@ -48,16 +66,21 @@ function serializeError(error: unknown): string {
     
     try {
       const json = JSON.stringify(errorObj, (key, val) => {
-        if (val instanceof Error) return val.message;
+        if (val instanceof Error) return val.message || val.toString();
         if (typeof val === 'function') return undefined;
+        if (typeof val === 'symbol') return val.toString();
         return val;
       });
       
       if (json && json !== '{}' && json !== 'null') {
         const parsed = JSON.parse(json);
-        if (parsed.message) return parsed.message;
+        if (parsed.message && typeof parsed.message === 'string') return parsed.message;
         return `Error: ${json.substring(0, 150)}`;
       }
+    } catch {}
+    
+    try {
+      return String(error);
     } catch {}
   }
   

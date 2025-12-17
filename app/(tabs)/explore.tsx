@@ -103,21 +103,41 @@ export default function ExploreScreen() {
     
     if (typeof error === 'string') return error;
     
-    if (error.message && typeof error.message === 'string') {
-      return error.message;
+    if (error.message) {
+      if (typeof error.message === 'string') {
+        return error.message;
+      }
+      try {
+        return JSON.stringify(error.message);
+      } catch {
+        return String(error.message);
+      }
+    }
+    
+    if (error.data?.message && typeof error.data.message === 'string') {
+      return error.data.message;
     }
     
     if (error.data?.code) {
       return `Error code: ${error.data.code}`;
     }
     
-    if (error.shape?.message) {
+    if (error.shape?.message && typeof error.shape.message === 'string') {
       return error.shape.message;
     }
     
     try {
-      const str = JSON.stringify(error);
-      if (str && str !== '{}') return `Error: ${str.substring(0, 100)}`;
+      const str = JSON.stringify(error, (key, val) => {
+        if (val instanceof Error) return val.message || val.toString();
+        if (typeof val === 'function') return undefined;
+        if (typeof val === 'symbol') return val.toString();
+        return val;
+      });
+      if (str && str !== '{}' && str !== 'null') return `Error: ${str.substring(0, 100)}`;
+    } catch {}
+    
+    try {
+      return String(error);
     } catch {}
     
     return "An unexpected error occurred. Please try again.";
