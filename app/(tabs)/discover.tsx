@@ -11,7 +11,6 @@ import {
   Animated,
   Image as RNImage,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -424,33 +423,31 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
 
   const renderInitialState = () => (
     <View style={styles.centeredContainer}>
-      <RNImage
-        source={{ uri: "https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/jfmqgdqcn6tq72670xyrz" }}
-        style={styles.logoImage}
-        resizeMode="contain"
-      />
-      <Text style={styles.title}>Discover Landmarks</Text>
+      <View style={styles.heroIcon}>
+        <Camera size={56} color={Colors.light.primary} strokeWidth={1.5} />
+      </View>
+      <Text style={styles.title}>Discover Places</Text>
       <Text style={styles.subtitle}>
-        Capture landmarks or museum art with your camera to receive detailed historical and cultural insights
+        Snap a photo of any landmark, monument, or artwork to instantly learn its story, history, and cultural significance
       </Text>
       
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={styles.primaryButton}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
           onPress={handleTakePhoto}
         >
-          <Camera size={24} color={Colors.light.background} />
+          <Camera size={22} color="#FFFFFF" strokeWidth={2} />
           <Text style={styles.primaryButtonText}>Take Photo</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
           onPress={handleUploadPhoto}
         >
-          <ImageIcon size={24} color={Colors.light.primary} />
-          <Text style={styles.secondaryButtonText}>Upload Photo</Text>
+          <ImageIcon size={22} color="#000000" strokeWidth={2} />
+          <Text style={styles.secondaryButtonText}>Choose from Library</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -570,11 +567,7 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
   );
 
   return (
-    <LinearGradient
-      colors={["#FAFBFC", "#F0F4F8"]}
-      locations={[0, 1]}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <ScrollView
@@ -585,13 +578,14 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
           {!selectedImage ? renderInitialState() : renderImagePreview()}
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   safeArea: {
     flex: 1,
@@ -602,54 +596,59 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingVertical: 60,
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 20,
+    gap: 24,
   },
-  logoImage: {
-    width: 268,
-    height: 268,
-    marginBottom: 5,
-    alignSelf: "center",
+  heroIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#F2F2F7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "700",
-    color: Colors.light.text,
+    color: "#000000",
     textAlign: "center",
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
   },
   subtitle: {
-    fontSize: 15,
-    color: Colors.light.textSecondary,
+    fontSize: 16,
+    color: "#8E8E93",
     textAlign: "center",
-    paddingHorizontal: 24,
-    lineHeight: 22,
+    paddingHorizontal: 32,
+    lineHeight: 24,
+    fontWeight: "400",
   },
   buttonContainer: {
     width: "100%",
-    gap: 16,
-    marginTop: 16,
+    gap: 12,
+    marginTop: 24,
+    paddingHorizontal: 8,
   },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
     backgroundColor: Colors.light.primary,
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 14,
+    borderRadius: 16,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
       },
       android: {
         elevation: 4,
@@ -657,48 +656,44 @@ const styles = StyleSheet.create({
     }),
   },
   primaryButtonText: {
-    color: Colors.light.background,
+    color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "600",
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
   secondaryButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    backgroundColor: Colors.light.card,
-    paddingVertical: 16,
+    gap: 12,
+    backgroundColor: "#F2F2F7",
+    paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.light.border,
+    borderRadius: 16,
   },
   secondaryButtonText: {
-    color: Colors.light.primary,
+    color: "#000000",
     fontSize: 17,
     fontWeight: "600",
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
   previewContainer: {
     flex: 1,
     width: "100%",
-    gap: 20,
+    gap: 16,
   },
   imageContainer: {
     width: "100%",
     aspectRatio: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    backgroundColor: "#F2F2F7",
     ...Platform.select({
       ios: {
-        shadowColor: Colors.light.shadow,
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowRadius: 16,
       },
       android: {
         elevation: 4,
@@ -711,65 +706,63 @@ const styles = StyleSheet.create({
   },
   locationBadge: {
     alignSelf: "center",
-    backgroundColor: Colors.light.card,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   locationText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.light.text,
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
   analyzeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
     backgroundColor: Colors.light.primary,
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 14,
+    borderRadius: 16,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.2,
         shadowRadius: 12,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
   analyzeButtonText: {
-    color: Colors.light.background,
+    color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
   loadingContainer: {
     alignItems: "center",
     gap: 16,
-    paddingVertical: 24,
+    paddingVertical: 32,
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
-    fontWeight: "600",
+    color: "#8E8E93",
+    fontWeight: "500",
   },
   resultsContainer: {
-    gap: 16,
+    gap: 20,
   },
   viewModeToggle: {
     flexDirection: "row",
-    gap: 12,
-    backgroundColor: Colors.light.card,
+    gap: 0,
+    backgroundColor: "#F2F2F7",
     padding: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
   },
   toggleButton: {
     flex: 1,
@@ -781,22 +774,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   toggleButtonActive: {
-    backgroundColor: Colors.light.primary,
+    backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
   toggleButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: Colors.light.text,
+    color: "#8E8E93",
   },
   toggleButtonTextActive: {
-    color: Colors.light.background,
+    color: "#000000",
   },
   textResultsScroll: {
     maxHeight: 300,
   },
   resultText: {
     fontSize: 16,
-    color: Colors.light.text,
+    color: "#000000",
     lineHeight: 26,
   },
   audioContainer: {
@@ -810,8 +814,8 @@ const styles = StyleSheet.create({
   },
   audioLoadingText: {
     fontSize: 16,
-    color: Colors.light.textSecondary,
-    fontWeight: "600",
+    color: "#8E8E93",
+    fontWeight: "500",
   },
   audioControls: {
     width: "100%",
@@ -824,37 +828,36 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: Colors.light.primary,
     paddingVertical: 18,
-    paddingHorizontal: 40,
-    borderRadius: 14,
+    paddingHorizontal: 48,
+    borderRadius: 16,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.2,
         shadowRadius: 12,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
   playButtonText: {
-    color: Colors.light.background,
-    fontSize: 18,
-    fontWeight: "700",
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
   resetButton: {
-    backgroundColor: Colors.light.card,
-    paddingVertical: 14,
+    backgroundColor: "#F2F2F7",
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-    marginTop: 8,
+    marginTop: 12,
   },
   resetButtonText: {
-    color: Colors.light.text,
+    color: "#000000",
     fontSize: 16,
     fontWeight: "600",
   },

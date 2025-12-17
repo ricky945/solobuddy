@@ -92,7 +92,7 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
           onPress={handleDelete}
           activeOpacity={0.7}
         >
-          <Trash2 size={24} color={Colors.light.background} />
+          <Trash2 size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
       <Animated.View
@@ -104,7 +104,7 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
       >
         <TouchableOpacity
           style={styles.card}
-          activeOpacity={0.7}
+          activeOpacity={0.95}
           onPress={onPress}
         >
           <View style={styles.cardContent}>
@@ -116,17 +116,17 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
                 />
               ) : (
                 <View style={styles.thumbnailPlaceholder}>
-                  <MapPin size={32} color={Colors.light.textSecondary} />
+                  <MapPin size={48} color="#C7C7CC" />
                 </View>
               )}
               <View style={styles.typeBadge}>
                 <Text style={styles.typeBadgeText}>
-                  {guide.type === "route" ? "Route" : "Immersive"}
+                  {guide.type === "route" ? "ROUTE" : "IMMERSIVE"}
                 </Text>
               </View>
               {guide.isDownloaded && (
                 <View style={styles.downloadedBadge}>
-                  <Download size={12} color={Colors.light.background} />
+                  <Download size={14} color="#FFFFFF" />
                 </View>
               )}
             </View>
@@ -138,15 +138,15 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
                 </Text>
                 <View style={styles.playButton}>
                   <Play
-                    size={20}
-                    color={Colors.light.primary}
-                    fill={Colors.light.primary}
+                    size={16}
+                    color="#FFFFFF"
+                    fill="#FFFFFF"
                   />
                 </View>
               </View>
 
               <View style={styles.locationRow}>
-                <MapPin size={14} color={Colors.light.textSecondary} />
+                <MapPin size={15} color="#8E8E93" />
                 <Text style={styles.locationText} numberOfLines={1}>
                   {guide.location || "Unknown location"}
                 </Text>
@@ -158,7 +158,7 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Clock size={14} color={Colors.light.textSecondary} />
+                  <Clock size={13} color="#8E8E93" />
                   <Text style={styles.metaText}>
                     {formatDuration(guide.duration)}
                   </Text>
@@ -180,18 +180,6 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
                   </>
                 )}
               </View>
-
-              {!guide.isDownloaded && (
-                <TouchableOpacity
-                  style={styles.downloadButton}
-                  activeOpacity={0.7}
-                >
-                  <Download size={16} color={Colors.light.primary} />
-                  <Text style={styles.downloadButtonText}>
-                    Download for offline
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         </TouchableOpacity>
@@ -277,7 +265,7 @@ export default function LibraryScreen() {
 const styles = StyleSheet.create({
   swipeableContainer: {
     position: "relative",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   deleteButtonContainer: {
     position: "absolute",
@@ -292,88 +280,100 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#ff3b30",
+    backgroundColor: "#FF3B30",
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   swipeableContent: {
     width: "100%",
   },
   container: {
     flex: 1,
-    backgroundColor: "#FAFBFC",
+    backgroundColor: "#FFFFFF",
   },
   safeArea: {
     flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 28,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "rgba(0, 0, 0, 0.06)",
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "700",
-    color: Colors.light.text,
-    marginBottom: 4,
-    letterSpacing: -0.5,
+    color: "#000000",
+    marginBottom: 6,
+    letterSpacing: -0.8,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    fontWeight: "500",
+    fontSize: 15,
+    color: "#8E8E93",
+    fontWeight: "400",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 32,
   },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 80,
+    paddingVertical: 100,
+    paddingHorizontal: 40,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "600",
-    color: Colors.light.text,
-    marginBottom: 8,
+    color: "#000000",
+    marginBottom: 12,
   },
   emptyDescription: {
-    fontSize: 15,
-    color: Colors.light.textSecondary,
+    fontSize: 16,
+    color: "#8E8E93",
     textAlign: "center",
+    lineHeight: 24,
   },
   card: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Colors.light.border,
     ...Platform.select({
       ios: {
-        shadowColor: Colors.light.shadow,
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
   cardContent: {
-    flexDirection: "row",
-    padding: 12,
+    overflow: "hidden",
   },
   imageContainer: {
-    width: 110,
-    height: 110,
-    borderRadius: 12,
-    overflow: "hidden",
+    width: "100%",
+    height: 240,
     position: "relative",
+    backgroundColor: "#F2F2F7",
   },
   thumbnail: {
     width: "100%",
@@ -381,101 +381,123 @@ const styles = StyleSheet.create({
   },
   typeBadge: {
     position: "absolute",
-    top: 8,
-    left: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    top: 16,
+    left: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   typeBadgeText: {
-    color: Colors.light.background,
-    fontSize: 10,
+    color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 0.5,
   },
   downloadedBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: Colors.light.success,
-    padding: 6,
-    borderRadius: 6,
+    top: 16,
+    right: 16,
+    backgroundColor: "#34C759",
+    padding: 8,
+    borderRadius: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   cardDetails: {
-    flex: 1,
-    marginLeft: 12,
+    padding: 16,
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   cardTitle: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
-    color: Colors.light.text,
-    marginRight: 8,
-    letterSpacing: -0.2,
+    color: "#000000",
+    marginRight: 12,
+    letterSpacing: -0.3,
+    lineHeight: 24,
   },
   playButton: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginBottom: 8,
+    gap: 6,
+    marginBottom: 12,
   },
   locationText: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
+    fontSize: 14,
+    color: "#8E8E93",
     flex: 1,
+    fontWeight: "500",
   },
   description: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
-    lineHeight: 18,
-    marginBottom: 10,
+    fontSize: 14,
+    color: "#3C3C43",
+    lineHeight: 20,
+    marginBottom: 16,
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: "rgba(0, 0, 0, 0.06)",
   },
   metaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
   },
   metaText: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
+    fontSize: 13,
+    color: "#8E8E93",
+    fontWeight: "500",
   },
   metaDividerContainer: {
     justifyContent: "center",
   },
   metaDivider: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
+    fontSize: 13,
+    color: "#C7C7CC",
   },
   downloadButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    marginTop: 8,
   },
   downloadButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.light.primary,
     fontWeight: "600",
   },
   thumbnailPlaceholder: {
     width: "100%",
     height: "100%",
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
   },
