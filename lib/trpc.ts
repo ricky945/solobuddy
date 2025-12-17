@@ -194,13 +194,28 @@ export const trpcClient = trpc.createClient({
                 errorMessage = errorData.error || errorData.message || errorMessage;
               } else {
                 const textResponse = await response.text();
-                errorMessage = textResponse || errorMessage;
+                
+                if (textResponse.includes('<!DOCTYPE html>') || textResponse.includes('<html')) {
+                  console.warn('[tRPC] Received HTML error page, likely blocked by security system');
+                  
+                  if (textResponse.includes('403') || textResponse.includes('Access Denied')) {
+                    errorMessage = 'Request blocked by security system. The request may be too large or contain invalid characters. Please try simplifying your request.';
+                  } else if (textResponse.includes('502') || textResponse.includes('Bad Gateway')) {
+                    errorMessage = 'Backend service temporarily unavailable. Please try again.';
+                  } else {
+                    errorMessage = 'Request blocked by server. Please try again later.';
+                  }
+                } else {
+                  errorMessage = textResponse.length > 200 ? textResponse.substring(0, 200) + '...' : textResponse;
+                }
               }
             } catch (parseError) {
               console.error('[tRPC] Error parsing response:', parseError);
             }
             
-            if (response.status === 404) {
+            if (response.status === 403) {
+              throw new Error('Access denied. The request may contain invalid characters or be too large. Please try with shorter text.');
+            } else if (response.status === 404) {
               throw new Error('Backend endpoint not found. Please check your connection.');
             } else if (response.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.');
