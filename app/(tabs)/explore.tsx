@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,9 +7,6 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
-  Animated,
-  PanResponder,
-  Dimensions,
   ScrollView,
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
@@ -22,65 +19,16 @@ import { trpc } from "@/lib/trpc";
 import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MAP_HEIGHT = SCREEN_HEIGHT * 0.75;
-const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.6;
-
 type LocationTab = "touristic" | "restaurant" | "unique";
 
 export default function ExploreScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(true);
-  const [locationError, setLocationError] = useState<string | null>(null);
   const [landmarks, setLandmarks] = useState<MapLandmark[]>([]);
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
-  
-  const sheetY = useRef(new Animated.Value(MAP_HEIGHT)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        const newY = MAP_HEIGHT + gestureState.dy;
-        const minY = SCREEN_HEIGHT - SHEET_MAX_HEIGHT;
-        const maxY = MAP_HEIGHT;
-        
-        if (newY >= minY && newY <= maxY) {
-          sheetY.setValue(newY);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const threshold = SCREEN_HEIGHT * 0.1;
-        
-        if (gestureState.dy < -threshold) {
-          Animated.spring(sheetY, {
-            toValue: SCREEN_HEIGHT - SHEET_MAX_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        } else if (gestureState.dy > threshold) {
-          Animated.spring(sheetY, {
-            toValue: MAP_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        } else {
-          Animated.spring(sheetY, {
-            toValue: MAP_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
   const discoverQuery = trpc.landmarks.discover.useQuery(
     {
@@ -91,138 +39,38 @@ export default function ExploreScreen() {
     },
     {
       enabled: !!location,
-      refetchOnWindowFocus: false,
-      staleTime: 600000,
-      retry: 2,
-      retryDelay: 800,
+      retry: 1,
     }
   );
 
-  const getErrorMessage = (error: any): string => {
-    console.log('[Explore] Getting error message from:', error);
-    console.log('[Explore] Error type:', typeof error);
-    console.log('[Explore] Error keys:', error ? Object.keys(error) : 'null');
-    
-    if (!error) return "An unexpected error occurred";
-    
-    if (typeof error === 'string') {
-      console.log('[Explore] Error is string:', error);
-      return error;
-    }
-    
-    if (error.message && typeof error.message === 'string') {
-      console.log('[Explore] Using error.message:', error.message);
-      return error.message;
-    }
-    
-    if (error.data?.message && typeof error.data.message === 'string') {
-      console.log('[Explore] Using error.data.message:', error.data.message);
-      return error.data.message;
-    }
-
-    if (error.shape?.data?.message && typeof error.shape.data.message === 'string') {
-      console.log('[Explore] Using error.shape.data.message:', error.shape.data.message);
-      return error.shape.data.message;
-    }
-    
-    if (error.shape?.message && typeof error.shape.message === 'string') {
-      console.log('[Explore] Using error.shape.message:', error.shape.message);
-      return error.shape.message;
-    }
-    
-    if (error.data?.code) {
-      console.log('[Explore] Using error code:', error.data.code);
-      return `Error code: ${error.data.code}`;
-    }
-    
-    try {
-      const safeStringify = (obj: any): string => {
-        const seen = new WeakSet();
-        return JSON.stringify(obj, (key, val) => {
-          if (typeof val === 'object' && val !== null) {
-            if (seen.has(val)) return '[Circular]';
-            seen.add(val);
-          }
-          if (val instanceof Error) return { message: val.message, name: val.name };
-          if (typeof val === 'function') return undefined;
-          if (typeof val === 'symbol') return val.toString();
-          return val;
-        }, 2);
-      };
-      
-      const str = safeStringify(error);
-      console.log('[Explore] Stringified error:', str.substring(0, 300));
-      
-      if (str && str !== '{}' && str !== 'null') {
-        const parsed = JSON.parse(str);
-        if (parsed.message && typeof parsed.message === 'string') {
-          return parsed.message;
-        }
-        if (parsed.data?.message) {
-          return String(parsed.data.message);
-        }
-        return `Error: ${str.substring(0, 100)}`;
-      }
-    } catch (e) {
-      console.error('[Explore] Error during stringify:', e);
-    }
-    
-    try {
-      const str = String(error);
-      console.log('[Explore] String conversion result:', str);
-      if (str && str !== '[object Object]') {
-        return str;
-      }
-    } catch {}
-    
-    return "Failed to load landmarks. Please check your internet connection and try again.";
-  };
-
-  useEffect(() => {
-    if (discoverQuery.isError) {
-      const error = discoverQuery.error;
-      const errorMsg = getErrorMessage(error);
-      console.error("[Explore] Failed to discover landmarks:", errorMsg);
-    }
-  }, [discoverQuery.isError, discoverQuery.error]);
-
   useEffect(() => {
     if (discoverQuery.data?.landmarks) {
-      console.log("[Explore] Landmarks loaded:", discoverQuery.data.landmarks.length, "from", discoverQuery.data.source);
+      console.log("[Explore] Loaded", discoverQuery.data.landmarks.length, "landmarks");
       setLandmarks(discoverQuery.data.landmarks as MapLandmark[]);
     }
   }, [discoverQuery.data]);
 
-
+  useEffect(() => {
+    if (discoverQuery.isError) {
+      console.error("[Explore] Error:", discoverQuery.error);
+    }
+  }, [discoverQuery.isError, discoverQuery.error]);
 
   useEffect(() => {
-    getLocationAsync();
+    getLocation();
   }, []);
 
-
-
-
-
-  const getLocationAsync = async () => {
-    console.log("[Explore] Requesting location...");
-
+  const getLocation = async () => {
+    console.log("[Explore] Getting location...");
+    
     try {
       if (Platform.OS === "web") {
-        if (!navigator.geolocation) {
-          setLocationError("Geolocation is not supported");
-          setIsLoadingLocation(false);
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
+        navigator.geolocation?.getCurrentPosition(
           (position) => {
-            const { latitude, longitude } = position.coords;
-            console.log("[Explore] Web location obtained:", { latitude, longitude });
-
             setLocation({
               coords: {
-                latitude,
-                longitude,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
                 altitude: null,
                 accuracy: null,
                 altitudeAccuracy: null,
@@ -234,39 +82,25 @@ export default function ExploreScreen() {
             setIsLoadingLocation(false);
           },
           (error) => {
-            console.error("[Explore] Web geolocation error:", error);
-            setLocationError("Failed to get location");
+            console.error("[Explore] Location error:", error);
             setIsLoadingLocation(false);
-          },
-          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+          }
         );
       } else {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        console.log("[Explore] Permission status:", status);
-
+        
         if (status !== "granted") {
-          Alert.alert(
-            "Permission Denied",
-            "Location permission is required to show the map."
-          );
-          setLocationError("Location permission denied");
+          Alert.alert("Permission Required", "Location access is needed");
           setIsLoadingLocation(false);
           return;
         }
 
-        const currentLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 1000,
-          distanceInterval: 1,
-        });
-
-        console.log("[Explore] Native location obtained:", currentLocation.coords);
-        setLocation(currentLocation);
+        const loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
         setIsLoadingLocation(false);
       }
     } catch (error) {
-      console.error("[Explore] Error getting location:", error);
-      setLocationError("Failed to get location");
+      console.error("[Explore] Error:", error);
       setIsLoadingLocation(false);
     }
   };
@@ -280,9 +114,7 @@ export default function ExploreScreen() {
 
 
   const handleAddLandmark = (landmark: MapLandmark) => {
-    console.log("[Explore] Adding user landmark:", landmark);
     setLandmarks([...landmarks, landmark]);
-    discoverQuery.refetch();
   };
 
   const getMarkerColor = (type: string) => {
@@ -298,7 +130,7 @@ export default function ExploreScreen() {
     }
   };
 
-  const filteredLandmarks = landmarks;
+
 
   const getTabIcon = (tab: LocationTab) => {
     switch (tab) {
@@ -335,181 +167,113 @@ export default function ExploreScreen() {
 
 
 
-  if (isLoadingLocation) {
+  if (isLoadingLocation || !location) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
-          <Text style={styles.loadingText}>Loading map...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (locationError || !location) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            {locationError || "Unable to load location"}
-          </Text>
-        </View>
+        <ActivityIndicator size="large" color={Colors.light.primary} style={{ marginTop: 100 }} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={[styles.mapContainer, { height: MAP_HEIGHT }]}>
-        <MapView
-          style={styles.map}
-          provider={PROVIDER_DEFAULT}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          showsCompass={true}
-          showsScale={true}
-        >
-          {landmarks.map((landmark) => (
-            <Marker
-              key={landmark.id}
-              coordinate={{
-                latitude: landmark.coordinates.latitude,
-                longitude: landmark.coordinates.longitude,
-              }}
-              title={landmark.name}
-              description={landmark.description}
-              onPress={() => handleMarkerPress(landmark)}
-              pinColor={getMarkerColor(landmark.type)}
-            />
-          ))}
-        </MapView>
+      <MapView
+        style={styles.map}
+        provider={PROVIDER_DEFAULT}
+        initialRegion={{
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+      >
+        {landmarks.map((landmark) => (
+          <Marker
+            key={landmark.id}
+            coordinate={{
+              latitude: landmark.coordinates.latitude,
+              longitude: landmark.coordinates.longitude,
+            }}
+            title={landmark.name}
+            onPress={() => handleMarkerPress(landmark)}
+            pinColor={getMarkerColor(landmark.type)}
+          />
+        ))}
+      </MapView>
 
-        {discoverQuery.isLoading && (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingCard}>
-              <ActivityIndicator size="small" color={Colors.light.primary} />
-              <Text style={styles.loadingOverlayText}>
-                Loading landmarks...
-              </Text>
-            </View>
-          </View>
-        )}
+      {discoverQuery.isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator color={Colors.light.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      )}
 
-        {discoverQuery.isError && (
-          <View style={styles.errorOverlay}>
-            <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Failed to load landmarks</Text>
-              <Text style={styles.errorMessage}>
-                {getErrorMessage(discoverQuery.error)}
-              </Text>
+      {discoverQuery.isError && (
+        <View style={styles.errorOverlay}>
+          <Text style={styles.errorText}>
+            {discoverQuery.error?.message || "Failed to load"}
+          </Text>
+          <TouchableOpacity onPress={() => discoverQuery.refetch()} style={styles.retryButton}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.bottomSheet}>
+        <View style={styles.tabs}>
+          {(["touristic", "restaurant", "unique"] as LocationTab[]).map((tab) => {
+            const Icon = getTabIcon(tab);
+            const active = activeTab === tab;
+            const color = getTabColor(tab);
+            
+            return (
               <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => discoverQuery.refetch()}
-                activeOpacity={0.7}
+                key={tab}
+                style={[styles.tab, active && { backgroundColor: color }]}
+                onPress={() => setActiveTab(tab)}
               >
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Icon size={16} color={active ? "#fff" : color} />
+                <Text style={[styles.tabText, active && { color: "#fff" }]}>
+                  {getTabLabel(tab)}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        )}
+            );
+          })}
+        </View>
 
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setIsAddModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Plus size={28} color="#fff" />
-        </TouchableOpacity>
+        <ScrollView style={styles.list}>
+          {landmarks.length === 0 && !discoverQuery.isLoading ? (
+            <Text style={styles.emptyText}>No landmarks found</Text>
+          ) : (
+            landmarks.map((landmark) => (
+              <TouchableOpacity
+                key={landmark.id}
+                style={styles.card}
+                onPress={() => handleMarkerPress(landmark)}
+              >
+                <MapPin size={20} color={Colors.light.primary} />
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardName} numberOfLines={1}>
+                    {landmark.name}
+                  </Text>
+                  <Text style={styles.cardDesc} numberOfLines={2}>
+                    {landmark.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
       </View>
 
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            top: sheetY,
-          },
-        ]}
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => setIsAddModalVisible(true)}
       >
-        <View {...panResponder.panHandlers} style={styles.sheetHandle}>
-          <View style={styles.handleBar} />
-        </View>
-
-        <View style={styles.sheetContent}>
-          <View style={styles.tabsContainer}>
-            {(["touristic", "restaurant", "unique"] as LocationTab[]).map((tab) => {
-              const Icon = getTabIcon(tab);
-              const isActive = activeTab === tab;
-              const color = getTabColor(tab);
-              
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  style={[
-                    styles.tab,
-                    isActive && { backgroundColor: color, borderColor: color },
-                  ]}
-                  onPress={() => setActiveTab(tab)}
-                  activeOpacity={0.7}
-                >
-                  <Icon size={18} color={isActive ? "#fff" : color} />
-                  <Text style={[
-                    styles.tabText,
-                    isActive && styles.tabTextActive,
-                  ]}>
-                    {getTabLabel(tab)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <ScrollView
-            style={styles.locationsList}
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredLandmarks.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>
-                  No landmarks found
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  Be the first to add a landmark in this area!
-                </Text>
-              </View>
-            ) : (
-              filteredLandmarks.map((landmark) => (
-                <TouchableOpacity
-                  key={landmark.id}
-                  style={styles.locationCard}
-                  onPress={() => handleMarkerPress(landmark)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.locationIcon,
-                    { backgroundColor: `${Colors.light.primary}20` },
-                  ]}>
-                    <MapPin size={20} color={Colors.light.primary} />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationName} numberOfLines={1}>
-                      {landmark.name}
-                    </Text>
-                    <Text style={styles.locationDescription} numberOfLines={2}>
-                      {landmark.description}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      </Animated.View>
+        <Plus size={24} color="#fff" />
+      </TouchableOpacity>
 
       <LandmarkDetailModal
         landmark={selectedLandmark}
@@ -546,245 +310,141 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  mapContainer: {
-    width: "100%",
-    position: "relative" as const,
   },
   map: {
-    width: "100%",
-    height: "100%",
-  },
-  loadingContainer: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.light.background,
-    gap: 16,
   },
-  loadingText: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    fontWeight: "600" as const,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.light.background,
-    paddingHorizontal: 32,
-  },
-  errorText: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    textAlign: "center",
-  },
-
   loadingOverlay: {
     position: "absolute" as const,
     top: 60,
-    left: 20,
-    right: 20,
-    alignItems: "center",
-  },
-  loadingCard: {
+    alignSelf: "center",
     backgroundColor: "#fff",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+    padding: 16,
+    borderRadius: 12,
     flexDirection: "row" as const,
-    alignItems: "center",
     gap: 12,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
   },
-  loadingOverlayText: {
+  loadingText: {
     fontSize: 14,
-    color: Colors.light.text,
-    fontWeight: "600" as const,
-  },
-
-  addButton: {
-    position: "absolute" as const,
-    bottom: 20,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: Colors.light.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  bottomSheet: {
-    position: "absolute" as const,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  sheetHandle: {
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  handleBar: {
-    width: 40,
-    height: 4,
-    backgroundColor: Colors.light.border,
-    borderRadius: 2,
-  },
-  sheetContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  tabsContainer: {
-    flexDirection: "row" as const,
-    gap: 10,
-    marginBottom: 16,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-  },
-  tabText: {
-    fontSize: 13,
     fontWeight: "600" as const,
     color: Colors.light.text,
-  },
-  tabTextActive: {
-    color: "#fff",
-  },
-  locationsList: {
-    flex: 1,
-  },
-  emptyState: {
-    paddingVertical: 40,
-    alignItems: "center",
-    gap: 8,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: Colors.light.text,
-    fontWeight: "600" as const,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    fontWeight: "500" as const,
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  locationCard: {
-    flexDirection: "row" as const,
-    alignItems: "center",
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.light.card,
-    borderRadius: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  locationIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locationInfo: {
-    flex: 1,
-  },
-  locationName: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  locationDescription: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
-    lineHeight: 18,
   },
   errorOverlay: {
     position: "absolute" as const,
     top: 60,
     left: 20,
     right: 20,
-    alignItems: "center",
-  },
-  errorCard: {
     backgroundColor: "#fff",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 12,
     alignItems: "center",
-    gap: 8,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
-    borderLeftWidth: 4,
-    borderLeftColor: "#EF4444",
+    elevation: 4,
   },
-  errorTitle: {
+  errorText: {
     fontSize: 14,
     color: Colors.light.text,
-    fontWeight: "700" as const,
-  },
-  errorMessage: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    textAlign: "center",
+    marginBottom: 12,
   },
   retryButton: {
-    marginTop: 8,
     backgroundColor: Colors.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  retryButtonText: {
-    fontSize: 13,
+  retryText: {
     color: "#fff",
+    fontSize: 14,
     fontWeight: "600" as const,
+  },
+  addButton: {
+    position: "absolute" as const,
+    bottom: 280,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  bottomSheet: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 260,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  tabs: {
+    flexDirection: "row" as const,
+    gap: 8,
+    marginBottom: 12,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.light.backgroundSecondary,
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.light.text,
+  },
+  list: {
+    flex: 1,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: Colors.light.textSecondary,
+    marginTop: 20,
+  },
+  card: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    backgroundColor: Colors.light.card,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  cardInfo: {
+    flex: 1,
+  },
+  cardName: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  cardDesc: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
   },
 });
