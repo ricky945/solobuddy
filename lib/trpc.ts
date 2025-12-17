@@ -22,8 +22,89 @@ const getBaseUrl = () => {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
+function serializeError(error: unknown): { message: string; type: string; details: any } {
+  const type = typeof error;
+  
+  if (error instanceof Error) {
+    const msg = serializeValue(error.message);
+    return {
+      message: msg || 'Unknown error',
+      type: 'Error instance',
+      details: {
+        name: error.name,
+        message: msg,
+        code: (error as any).code,
+        cause: serializeValue((error as any).cause),
+        stack: error.stack?.substring(0, 300),
+      }
+    };
+  }
+  
+  if (type === 'object' && error !== null) {
+    const errorObj = error as any;
+    const message = 'message' in errorObj ? serializeValue(errorObj.message) : serializeValue(error);
+    return {
+      message: message || 'Unknown object error',
+      type: 'object',
+      details: {
+        keys: Object.keys(errorObj),
+        serialized: serializeValue(error),
+      }
+    };
+  }
+  
+  if (type === 'string') {
+    return {
+      message: error as string,
+      type: 'string',
+      details: { raw: error }
+    };
+  }
+  
+  return {
+    message: String(error),
+    type,
+    details: { raw: error }
+  };
+}
+
+function serializeValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  
+  if (typeof value === 'object') {
+    try {
+      const jsonStr = JSON.stringify(value, (key, val) => {
+        if (typeof val === 'function') return '[Function]';
+        if (val instanceof Error) return val.message;
+        return val;
+      });
+      
+      if (jsonStr && jsonStr !== '{}' && jsonStr !== '[]') {
+        return jsonStr;
+      }
+      
+      const keys = Object.keys(value);
+      if (keys.length > 0) {
+        return `Object with keys: ${keys.join(', ')}`;
+      }
+      
+      return String(value);
+    } catch {
+      return String(value);
+    }
+  }
+  
+  return String(value);
+}
+
 function isNetworkError(error: any): boolean {
-  const message = error?.message?.toLowerCase() || '';
+  const message = serializeValue(error?.message || error).toLowerCase();
   return (
     message.includes('network') ||
     message.includes('fetch failed') ||
@@ -115,68 +196,11 @@ export const trpcClient = trpc.createClient({
           
           return response;
         } catch (error) {
-          let errorMessage = 'Unknown error occurred';
+          const errorInfo = serializeError(error);
           
-          if (error instanceof Error) {
-            if (typeof error.message === 'object' && error.message !== null) {
-              try {
-                errorMessage = JSON.stringify(error.message);
-              } catch {
-                errorMessage = 'Error with non-serializable message object';
-              }
-            } else if (error.message) {
-              errorMessage = error.message;
-            } else {
-              errorMessage = 'Unknown error';
-            }
-          } else if (typeof error === 'object' && error !== null) {
-            if ('message' in error) {
-              if (typeof error.message === 'string') {
-                errorMessage = error.message;
-              } else if (typeof error.message === 'object' && error.message !== null) {
-                try {
-                  errorMessage = JSON.stringify(error.message);
-                } catch {
-                  errorMessage = 'Error with non-serializable message';
-                }
-              } else {
-                errorMessage = String(error.message);
-              }
-            } else {
-              try {
-                const jsonStr = JSON.stringify(error);
-                if (jsonStr !== '{}') {
-                  errorMessage = jsonStr;
-                } else {
-                  const keys = Object.keys(error);
-                  errorMessage = keys.length > 0 
-                    ? `Error with properties: ${keys.join(', ')}`
-                    : 'Unknown error (empty object)';
-                }
-              } catch {
-                errorMessage = 'Error with non-serializable object';
-              }
-            }
-          } else if (typeof error === 'string') {
-            errorMessage = error;
-          } else {
-            errorMessage = String(error);
-          }
-          
-          console.error('[tRPC] Request failed:', errorMessage);
-          console.error('[tRPC] Error type:', typeof error);
-          
-          if (error && typeof error === 'object') {
-            const errorObj = error as any;
-            console.error('[tRPC] Error details:', {
-              name: errorObj.name,
-              message: typeof errorObj.message === 'object' 
-                ? JSON.stringify(errorObj.message) 
-                : errorObj.message,
-              code: errorObj.code,
-              stack: errorObj.stack?.substring(0, 200),
-            });
-          }
+          console.error('[tRPC] Request failed:', errorInfo.message);
+          console.error('[tRPC] Error type:', errorInfo.type);
+          console.error('[tRPC] Error details:', errorInfo.details);
           
           if (isNetworkError(error)) {
             if (Platform.OS === 'web') {
@@ -186,7 +210,7 @@ export const trpcClient = trpc.createClient({
             }
           }
           
-          throw new Error(errorMessage);
+          throw new Error(errorInfo.message);
         }
       },
     }),
