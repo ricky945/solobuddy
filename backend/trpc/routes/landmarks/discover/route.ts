@@ -170,9 +170,9 @@ export default publicProcedure
         source: "google_places" as const,
       };
     } catch (error: any) {
-      console.error("[Landmarks] Error:", error);
-      console.error("[Landmarks] Message:", error?.message);
-      console.error("[Landmarks] Name:", error?.name);
+      const errorMessage = getErrorMessage(error);
+      console.error("[Landmarks] Error:", errorMessage);
+      console.error("[Landmarks] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
       if (error instanceof TRPCError) {
         throw error;
@@ -186,8 +186,8 @@ export default publicProcedure
       }
 
       const isNetworkError = 
-        error?.message?.toLowerCase()?.includes('network') ||
-        error?.message?.toLowerCase()?.includes('fetch') ||
+        errorMessage.toLowerCase().includes('network') ||
+        errorMessage.toLowerCase().includes('fetch') ||
         error?.code === 'ECONNREFUSED' ||
         error?.code === 'ETIMEDOUT';
 
@@ -195,10 +195,42 @@ export default publicProcedure
         code: isNetworkError ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
         message: isNetworkError 
           ? "Network error. Please check your internet connection."
-          : error?.message || "Failed to discover landmarks",
+          : errorMessage,
       });
     }
   });
+
+function getErrorMessage(error: unknown): string {
+  if (!error) return "An unexpected error occurred";
+  
+  if (typeof error === 'string') return error;
+  
+  if (error instanceof Error) {
+    return error.message || "Unknown error occurred";
+  }
+  
+  if (typeof error === 'object') {
+    const errorObj = error as any;
+    
+    if (errorObj.message) {
+      if (typeof errorObj.message === 'string') {
+        return errorObj.message;
+      }
+      try {
+        return JSON.stringify(errorObj.message);
+      } catch {}
+    }
+    
+    try {
+      const json = JSON.stringify(errorObj);
+      if (json && json !== '{}') {
+        return `Error: ${json.substring(0, 200)}`;
+      }
+    } catch {}
+  }
+  
+  return "Failed to discover landmarks. Please try again.";
+}
 
 function getCategoryFromTypes(
   types: string[]
