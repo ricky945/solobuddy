@@ -72,7 +72,7 @@ export default publicProcedure
       console.log("[Landmarks] Google Places request:", JSON.stringify(requestBody, null, 2));
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       let response;
       try {

@@ -92,9 +92,9 @@ export default function ExploreScreen() {
     {
       enabled: !!location,
       refetchOnWindowFocus: false,
-      staleTime: 300000,
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      staleTime: 600000,
+      retry: 2,
+      retryDelay: 800,
     }
   );
 
@@ -139,12 +139,7 @@ export default function ExploreScreen() {
     }
   }, [discoverQuery.data]);
 
-  useEffect(() => {
-    if (location) {
-      console.log("[Explore] Refetching for tab:", activeTab);
-      discoverQuery.refetch();
-    }
-  }, [activeTab, location, discoverQuery]);
+
 
   useEffect(() => {
     getLocationAsync();
