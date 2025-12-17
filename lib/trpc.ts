@@ -22,97 +22,64 @@ const getBaseUrl = () => {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-function serializeError(error: unknown): { message: string; type: string; details: any } {
-  const type = typeof error;
+function serializeError(error: unknown): string {
+  if (!error) return 'An unexpected error occurred';
+  
+  if (typeof error === 'string') return error;
   
   if (error instanceof Error) {
-    const msg = serializeValue(error.message);
-    return {
-      message: msg || 'Unknown error',
-      type: 'Error instance',
-      details: {
-        name: error.name,
-        message: msg,
-        code: (error as any).code,
-        cause: serializeValue((error as any).cause),
-        stack: error.stack?.substring(0, 300),
-      }
-    };
+    return error.message || 'Unknown error occurred';
   }
   
-  if (type === 'object' && error !== null) {
+  if (typeof error === 'object') {
     const errorObj = error as any;
-    const message = 'message' in errorObj ? serializeValue(errorObj.message) : serializeValue(error);
-    return {
-      message: message || 'Unknown object error',
-      type: 'object',
-      details: {
-        keys: Object.keys(errorObj),
-        serialized: serializeValue(error),
-      }
-    };
-  }
-  
-  if (type === 'string') {
-    return {
-      message: error as string,
-      type: 'string',
-      details: { raw: error }
-    };
-  }
-  
-  return {
-    message: String(error),
-    type,
-    details: { raw: error }
-  };
-}
-
-function serializeValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-  
-  if (value === null || value === undefined) {
-    return String(value);
-  }
-  
-  if (typeof value === 'object') {
+    
+    if (errorObj.message && typeof errorObj.message === 'string') {
+      return errorObj.message;
+    }
+    
+    if (errorObj.data?.message && typeof errorObj.data.message === 'string') {
+      return errorObj.data.message;
+    }
+    
+    if (errorObj.shape?.message && typeof errorObj.shape.message === 'string') {
+      return errorObj.shape.message;
+    }
+    
     try {
-      const jsonStr = JSON.stringify(value, (key, val) => {
-        if (typeof val === 'function') return '[Function]';
+      const json = JSON.stringify(errorObj, (key, val) => {
         if (val instanceof Error) return val.message;
+        if (typeof val === 'function') return undefined;
         return val;
       });
       
-      if (jsonStr && jsonStr !== '{}' && jsonStr !== '[]') {
-        return jsonStr;
+      if (json && json !== '{}' && json !== 'null') {
+        const parsed = JSON.parse(json);
+        if (parsed.message) return parsed.message;
+        return `Error: ${json.substring(0, 150)}`;
       }
-      
-      const keys = Object.keys(value);
-      if (keys.length > 0) {
-        return `Object with keys: ${keys.join(', ')}`;
-      }
-      
-      return String(value);
-    } catch {
-      return String(value);
-    }
+    } catch {}
   }
   
-  return String(value);
+  return 'An unexpected error occurred. Please try again.';
 }
 
+
+
 function isNetworkError(error: any): boolean {
-  const message = serializeValue(error?.message || error).toLowerCase();
+  if (!error) return false;
+  
+  const message = String(error?.message || error || '').toLowerCase();
+  const code = error?.code || '';
+  
   return (
     message.includes('network') ||
     message.includes('fetch failed') ||
     message.includes('failed to fetch') ||
     message.includes('network request failed') ||
     message.includes('timeout') ||
-    error?.code === 'ECONNREFUSED' ||
-    error?.code === 'ETIMEDOUT'
+    code === 'ECONNREFUSED' ||
+    code === 'ETIMEDOUT'
   );
 }
 
@@ -196,21 +163,17 @@ export const trpcClient = trpc.createClient({
           
           return response;
         } catch (error) {
-          const errorInfo = serializeError(error);
-          
-          console.error('[tRPC] Request failed:', errorInfo.message);
-          console.error('[tRPC] Error type:', errorInfo.type);
-          console.error('[tRPC] Error details:', errorInfo.details);
+          const errorMessage = serializeError(error);
+          console.error('[tRPC] Request failed:', errorMessage);
           
           if (isNetworkError(error)) {
-            if (Platform.OS === 'web') {
-              throw new Error('Connection failed. Please check your internet connection.');
-            } else {
-              throw new Error('Network error. Please check your connection and try again.');
-            }
+            const msg = Platform.OS === 'web'
+              ? 'Connection failed. Please check your internet connection.'
+              : 'Network error. Please check your connection and try again.';
+            throw new Error(msg);
           }
           
-          throw new Error(errorInfo.message);
+          throw new Error(errorMessage);
         }
       },
     }),
