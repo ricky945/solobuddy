@@ -28,32 +28,14 @@ function serializeError(error: unknown): string {
   if (typeof error === 'string') return error;
   
   if (error instanceof Error) {
-    const msg = error.message;
-    if (typeof msg === 'string') return msg || 'Unknown error occurred';
-    if (typeof msg === 'object') {
-      try {
-        return JSON.stringify(msg);
-      } catch {
-        return String(msg);
-      }
-    }
-    return String(msg);
+    return error.message || 'Unknown error occurred';
   }
   
   if (typeof error === 'object') {
     const errorObj = error as any;
     
-    if (errorObj.message) {
-      if (typeof errorObj.message === 'string') {
-        return errorObj.message;
-      }
-      if (typeof errorObj.message === 'object') {
-        try {
-          return JSON.stringify(errorObj.message);
-        } catch {
-          return String(errorObj.message);
-        }
-      }
+    if (errorObj.message && typeof errorObj.message === 'string') {
+      return errorObj.message;
     }
     
     if (errorObj.data?.message && typeof errorObj.data.message === 'string') {
@@ -65,24 +47,23 @@ function serializeError(error: unknown): string {
     }
     
     try {
-      const json = JSON.stringify(errorObj, (key, val) => {
-        if (val instanceof Error) return val.message || val.toString();
-        if (typeof val === 'function') return undefined;
-        if (typeof val === 'symbol') return val.toString();
-        return val;
-      });
+      const cleanError: any = {};
+      if (errorObj.message) cleanError.message = String(errorObj.message);
+      if (errorObj.code) cleanError.code = String(errorObj.code);
+      if (errorObj.data) cleanError.data = errorObj.data;
       
+      const json = JSON.stringify(cleanError, null, 2);
       if (json && json !== '{}' && json !== 'null') {
         const parsed = JSON.parse(json);
-        if (parsed.message && typeof parsed.message === 'string') return parsed.message;
-        return `Error: ${json.substring(0, 150)}`;
+        if (parsed.message) return String(parsed.message);
+        return json;
       }
     } catch {}
-    
-    try {
-      return String(error);
-    } catch {}
   }
+  
+  try {
+    return String(error);
+  } catch {}
   
   return 'An unexpected error occurred. Please try again.';
 }
