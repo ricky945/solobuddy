@@ -1355,14 +1355,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 0,
+    paddingBottom: 32,
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     width: "100%",
     gap: 20,
+    paddingTop: 8,
   },
   welcomeImage: {
     width: 180,
@@ -1417,7 +1419,7 @@ const styles = StyleSheet.create({
   },
   questionTitle: {
     fontSize: 26,
-    fontWeight: "700",
+    fontWeight: "600",
     color: Colors.light.text,
     textAlign: "center",
     marginBottom: 32,
