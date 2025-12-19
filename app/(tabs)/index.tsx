@@ -916,7 +916,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
       <View style={styles.welcomeGlobeContainer}>
         <Image 
-          source={{ uri: "https://r2-pub.rork.com/generated-images/80af0d67-8f82-4404-bff0-53a50a329173.png" }} 
+          source={{ uri: "https://r2-pub.rork.com/generated-images/e7f0180b-62e5-413d-a599-49a62ae13636.png" }} 
           style={styles.welcomeGlobeImage}
           resizeMode="contain"
         />
@@ -1377,7 +1377,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
     zIndex: 0,
-    opacity: 0.85,
+    opacity: 0.25,
   },
   welcomeGlobeImage: {
     width: 420,
