@@ -80,7 +80,11 @@ export default function ExploreScreen() {
     },
     {
       enabled: !!location,
-      retry: 1,
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     }
   );
 

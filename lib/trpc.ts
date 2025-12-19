@@ -21,6 +21,7 @@ const getBaseUrl = () => {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+const RATE_LIMIT_RETRY_DELAY_MS = 5000;
 
 function serializeError(error: unknown): string {
   console.log('[tRPC] Serializing error:', error);
@@ -141,7 +142,8 @@ function isNetworkError(error: any): boolean {
 async function fetchWithRetry(
   url: string,
   options?: RequestInit,
-  retryCount = 0
+  retryCount = 0,
+  isRateLimitRetry = false
 ): Promise<Response> {
   try {
     const controller = new AbortController();
@@ -153,6 +155,17 @@ async function fetchWithRetry(
     });
     
     clearTimeout(timeoutId);
+    
+    if (response.status === 429 && retryCount < 2) {
+      const delay = isRateLimitRetry 
+        ? RATE_LIMIT_RETRY_DELAY_MS * Math.pow(2, retryCount)
+        : RATE_LIMIT_RETRY_DELAY_MS;
+      
+      console.log(`[tRPC] Rate limited. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, retryCount + 1, true);
+    }
+    
     return response;
   } catch (error: any) {
     console.error(`[tRPC] Fetch attempt ${retryCount + 1} failed:`, error);
@@ -167,7 +180,7 @@ async function fetchWithRetry(
       console.log(`[tRPC] Retrying in ${delay}ms...`);
       
       await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchWithRetry(url, options, retryCount + 1);
+      return fetchWithRetry(url, options, retryCount + 1, isRateLimitRetry);
     }
     
     throw error;
