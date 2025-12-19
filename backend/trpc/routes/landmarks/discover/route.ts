@@ -37,7 +37,7 @@ export default publicProcedure
           headers: {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.types,places.editorialSummary",
+            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.types,places.editorialSummary,places.photos,places.rating,places.formattedAddress",
           },
           body: JSON.stringify({
             includedTypes: typeMap[input.type],
@@ -70,24 +70,54 @@ export default publicProcedure
 
       console.log("[Landmarks] Found", places.length, "places");
 
-      const landmarks = places.map((place: any) => ({
-        id: place.id,
-        name: place.displayName?.text || "Unknown",
-        description: place.editorialSummary?.text || "A notable location",
-        coordinates: {
-          latitude: place.location?.latitude || 0,
-          longitude: place.location?.longitude || 0,
-        },
-        imageUrl: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800",
-        category: "historical" as const,
-        type: input.type,
-        createdBy: "system",
-        createdByName: "System",
-        createdAt: Date.now(),
-        upvotes: 0,
-        upvotedBy: [],
-        reviews: [],
-      }));
+      const landmarks = places.map((place: any) => {
+        const photoReference = place.photos?.[0]?.name;
+        const imageUrl = photoReference
+          ? `https://places.googleapis.com/v1/${photoReference}/media?maxHeightPx=800&maxWidthPx=800&key=${apiKey}`
+          : "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800";
+
+        let description = place.editorialSummary?.text || "";
+        
+        if (!description) {
+          const types = place.types || [];
+          const rating = place.rating ? ` Rated ${place.rating.toFixed(1)}/5.0.` : "";
+          
+          if (types.includes("museum")) {
+            description = `A fascinating museum showcasing unique exhibits and cultural artifacts. Perfect for history and art enthusiasts.${rating}`;
+          } else if (types.includes("church") || types.includes("place_of_worship")) {
+            description = `An architectural marvel with stunning design and rich historical significance. A peaceful place for reflection and cultural appreciation.${rating}`;
+          } else if (types.includes("park")) {
+            description = `A beautiful outdoor space ideal for relaxation, walking, and enjoying nature. Great for photos and peaceful moments.${rating}`;
+          } else if (types.includes("art_gallery")) {
+            description = `An inspiring gallery featuring remarkable artworks and exhibitions. A must-visit for art lovers and creative minds.${rating}`;
+          } else if (types.includes("tourist_attraction")) {
+            description = `A popular destination offering unique experiences and memorable moments. Highly recommended for visitors.${rating}`;
+          } else if (types.includes("landmark")) {
+            description = `An iconic landmark representing the area's heritage and character. A must-see attraction with photo opportunities.${rating}`;
+          } else {
+            description = `An interesting location worth exploring. Discover what makes this place special.${rating}`;
+          }
+        }
+
+        return {
+          id: place.id,
+          name: place.displayName?.text || "Unknown",
+          description,
+          coordinates: {
+            latitude: place.location?.latitude || 0,
+            longitude: place.location?.longitude || 0,
+          },
+          imageUrl,
+          category: "historical" as const,
+          type: input.type,
+          createdBy: "system",
+          createdByName: "System",
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        };
+      });
 
       return {
         landmarks,
