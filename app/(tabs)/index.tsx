@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
@@ -1042,7 +1043,11 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       </View>
       <View style={styles.welcomeContent}>
         <View style={styles.passportMascot}>
-          <BookOpen size={72} color={Colors.light.primary} strokeWidth={1.5} />
+          <Image
+            source={{ uri: 'https://r2-pub.rork.com/generated-images/0b053cc8-ad50-435d-bd48-406d9822595f.png' }}
+            style={styles.passportMascotImage}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
         <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
@@ -1857,6 +1862,14 @@ const styles = StyleSheet.create({
   },
   passportMascot: {
     marginBottom: 8,
+    width: 140,
+    height: 140,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  passportMascotImage: {
+    width: 140,
+    height: 140,
   },
   orbit: {
     position: "absolute" as const,
