@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -8,10 +8,13 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Utensils, Sparkles } from "lucide-react-native";
+import { Plus, MapPin, Utensils, Sparkles, ChevronsUp } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
@@ -21,14 +24,47 @@ import AddLandmarkModal from "@/components/AddLandmarkModal";
 
 type LocationTab = "touristic" | "restaurant" | "unique";
 
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const BOTTOM_SHEET_MIN_HEIGHT = 280;
+const BOTTOM_SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.7;
+
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(km: number): string {
+  if (km < 1) {
+    return `${Math.round(km * 1000)}m`;
+  }
+  return `${km.toFixed(1)}km`;
+}
+
 export default function ExploreScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(true);
-  const [landmarks, setLandmarks] = useState<MapLandmark[]>([]);
+  const [landmarks, setLandmarks] = useState<(MapLandmark & { distance?: number })[]>([]);
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
+  
+  const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const discoverQuery = trpc.landmarks.discover.useQuery(
     {
@@ -44,11 +80,23 @@ export default function ExploreScreen() {
   );
 
   useEffect(() => {
-    if (discoverQuery.data?.landmarks) {
+    if (discoverQuery.data?.landmarks && location) {
       console.log("[Explore] Loaded", discoverQuery.data.landmarks.length, "landmarks");
-      setLandmarks(discoverQuery.data.landmarks as MapLandmark[]);
+      
+      const landmarksWithDistance = (discoverQuery.data.landmarks as MapLandmark[]).map((landmark) => ({
+        ...landmark,
+        distance: calculateDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          landmark.coordinates.latitude,
+          landmark.coordinates.longitude
+        ),
+      }));
+      
+      const sorted = landmarksWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      setLandmarks(sorted);
     }
-  }, [discoverQuery.data]);
+  }, [discoverQuery.data, location]);
 
   useEffect(() => {
     if (discoverQuery.isError) {
@@ -105,13 +153,72 @@ export default function ExploreScreen() {
     }
   };
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy < 0 && !isExpanded) {
+          const newHeight = Math.min(
+            BOTTOM_SHEET_MIN_HEIGHT - gestureState.dy,
+            BOTTOM_SHEET_MAX_HEIGHT
+          );
+          bottomSheetHeight.setValue(newHeight);
+        } else if (gestureState.dy > 0 && isExpanded) {
+          const newHeight = Math.max(
+            BOTTOM_SHEET_MAX_HEIGHT + gestureState.dy,
+            BOTTOM_SHEET_MIN_HEIGHT
+          );
+          bottomSheetHeight.setValue(newHeight);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -50 && !isExpanded) {
+          setIsExpanded(true);
+          Animated.spring(bottomSheetHeight, {
+            toValue: BOTTOM_SHEET_MAX_HEIGHT,
+            useNativeDriver: false,
+            tension: 50,
+            friction: 8,
+          }).start();
+        } else if (gestureState.dy > 50 && isExpanded) {
+          setIsExpanded(false);
+          Animated.spring(bottomSheetHeight, {
+            toValue: BOTTOM_SHEET_MIN_HEIGHT,
+            useNativeDriver: false,
+            tension: 50,
+            friction: 8,
+          }).start();
+        } else {
+          Animated.spring(bottomSheetHeight, {
+            toValue: isExpanded ? BOTTOM_SHEET_MAX_HEIGHT : BOTTOM_SHEET_MIN_HEIGHT,
+            useNativeDriver: false,
+            tension: 50,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   const handleMarkerPress = (landmark: MapLandmark) => {
     console.log("[Explore] Landmark selected:", landmark.name);
     setSelectedLandmark(landmark);
     setIsModalVisible(true);
   };
 
-
+  const toggleBottomSheet = () => {
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    Animated.spring(bottomSheetHeight, {
+      toValue: newExpanded ? BOTTOM_SHEET_MAX_HEIGHT : BOTTOM_SHEET_MIN_HEIGHT,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 8,
+    }).start();
+  };
 
   const handleAddLandmark = (landmark: MapLandmark) => {
     setLandmarks([...landmarks, landmark]);
@@ -129,8 +236,6 @@ export default function ExploreScreen() {
         return Colors.light.primary;
     }
   };
-
-
 
   const getTabIcon = (tab: LocationTab) => {
     switch (tab) {
@@ -164,8 +269,6 @@ export default function ExploreScreen() {
         return "Hidden Gems";
     }
   };
-
-
 
   if (isLoadingLocation || !location) {
     return (
@@ -221,7 +324,11 @@ export default function ExploreScreen() {
         </View>
       )}
 
-      <View style={styles.bottomSheet}>
+      <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
+        <View {...panResponder.panHandlers} style={styles.handle}>
+          <View style={styles.handleBar} />
+        </View>
+
         <View style={styles.tabs}>
           {(["touristic", "restaurant", "unique"] as LocationTab[]).map((tab) => {
             const Icon = getTabIcon(tab);
@@ -243,7 +350,24 @@ export default function ExploreScreen() {
           })}
         </View>
 
-        <ScrollView style={styles.list}>
+        <TouchableOpacity 
+          onPress={toggleBottomSheet}
+          style={styles.expandButton}
+          activeOpacity={0.7}
+        >
+          <ChevronsUp 
+            size={20} 
+            color={Colors.light.textSecondary}
+            style={{
+              transform: [{ rotate: isExpanded ? "180deg" : "0deg" }],
+            }}
+          />
+          <Text style={styles.expandText}>
+            {isExpanded ? "Show Less" : "Show All"}
+          </Text>
+        </TouchableOpacity>
+
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {landmarks.length === 0 && !discoverQuery.isLoading ? (
             <Text style={styles.emptyText}>No landmarks found</Text>
           ) : (
@@ -253,11 +377,18 @@ export default function ExploreScreen() {
                 style={styles.card}
                 onPress={() => handleMarkerPress(landmark)}
               >
-                <MapPin size={20} color={Colors.light.primary} />
+                <View style={styles.cardIcon}>
+                  <MapPin size={20} color={Colors.light.primary} />
+                </View>
                 <View style={styles.cardInfo}>
-                  <Text style={styles.cardName} numberOfLines={1}>
-                    {landmark.name}
-                  </Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardName} numberOfLines={1}>
+                      {landmark.name}
+                    </Text>
+                    <Text style={styles.cardDistance}>
+                      {formatDistance(landmark.distance || 0)}
+                    </Text>
+                  </View>
                   <Text style={styles.cardDesc} numberOfLines={2}>
                     {landmark.description}
                   </Text>
@@ -266,7 +397,7 @@ export default function ExploreScreen() {
             ))
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
 
       <TouchableOpacity
         style={styles.addButton}
@@ -367,7 +498,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     position: "absolute" as const,
-    bottom: 280,
+    bottom: 300,
     right: 20,
     width: 56,
     height: 56,
@@ -386,16 +517,39 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 260,
     backgroundColor: "#fff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
+  },
+  handle: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderRadius: 2,
+  },
+  expandButton: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  expandText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
   },
   tabs: {
     flexDirection: "row" as const,
@@ -427,12 +581,21 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: "row" as const,
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
-    padding: 12,
+    padding: 14,
     backgroundColor: Colors.light.card,
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  cardIcon: {
+    marginTop: 2,
+  },
+  cardHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
   cardInfo: {
     flex: 1,
@@ -441,7 +604,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600" as const,
     color: Colors.light.text,
-    marginBottom: 2,
+    flex: 1,
+    marginRight: 8,
+  },
+  cardDistance: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: Colors.light.primary,
   },
   cardDesc: {
     fontSize: 13,

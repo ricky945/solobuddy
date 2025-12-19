@@ -8,8 +8,9 @@ import {
   Image,
   Linking,
   Platform,
+  ScrollView,
 } from "react-native";
-import { X, Navigation } from "lucide-react-native";
+import { X, Navigation, MapPin } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
 
@@ -23,6 +24,96 @@ interface LandmarkDetailModalProps {
   onClose: () => void;
 }
 
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(km: number): string {
+  if (km < 1) {
+    return `${Math.round(km * 1000)}m away`;
+  }
+  return `${km.toFixed(1)}km away`;
+}
+
+function generateGooglePlacesImageUrl(placeName: string): string {
+  const encodedName = encodeURIComponent(placeName);
+  return `https://source.unsplash.com/800x400/?${encodedName},landmark,architecture`;
+}
+
+function generateWhyVisit(landmark: MapLandmark): string {
+  const category = landmark.category;
+  const type = landmark.type;
+  
+  const reasons = {
+    historical: [
+      "Step back in time and experience centuries of rich history",
+      "Discover the fascinating stories that shaped this location",
+      "A remarkable window into the past you won't want to miss",
+    ],
+    cultural: [
+      "Immerse yourself in authentic local culture and traditions",
+      "Experience the vibrant cultural heart of the area",
+      "A cultural treasure that showcases the essence of this place",
+    ],
+    religious: [
+      "Marvel at stunning architectural beauty and spiritual significance",
+      "A serene sanctuary offering peace and architectural wonder",
+      "Experience the profound history and artistry of sacred architecture",
+    ],
+    museum: [
+      "Explore world-class exhibits and fascinating collections",
+      "An inspiring journey through art, history, and innovation",
+      "Discover rare artifacts and captivating stories",
+    ],
+    park: [
+      "Escape to natural beauty and peaceful surroundings",
+      "Perfect spot for relaxation and outdoor activities",
+      "A green oasis offering stunning views and fresh air",
+    ],
+    monument: [
+      "An iconic symbol with powerful historical significance",
+      "Stand in awe of this impressive architectural achievement",
+      "A must-see landmark that defines the city's skyline",
+    ],
+    building: [
+      "Admire exceptional architecture and design excellence",
+      "A stunning example of architectural innovation",
+      "Experience the grandeur of this architectural masterpiece",
+    ],
+    natural: [
+      "Witness breathtaking natural beauty and landscapes",
+      "A spectacular natural wonder that takes your breath away",
+      "Experience nature's magnificent artistry firsthand",
+    ],
+  };
+
+  if (type === "restaurant") {
+    return "Savor exceptional cuisine and authentic local flavors in a welcoming atmosphere";
+  }
+
+  if (type === "unique") {
+    return "Discover a hidden gem that offers a unique and unforgettable experience";
+  }
+
+  const categoryReasons = reasons[category] || reasons.historical;
+  return categoryReasons[Math.floor(Math.random() * categoryReasons.length)];
+}
+
 export default function LandmarkDetailModal({
   landmark,
   userLocation,
@@ -31,7 +122,14 @@ export default function LandmarkDetailModal({
 }: LandmarkDetailModalProps) {
   if (!landmark || !visible) return null;
 
-
+  const distance = userLocation
+    ? calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        landmark.coordinates.latitude,
+        landmark.coordinates.longitude
+      )
+    : 0;
 
   const handleGetDirections = () => {
     if (!userLocation) return;
@@ -54,7 +152,8 @@ export default function LandmarkDetailModal({
     );
   };
 
-  const whyVisit = landmark.userNote || "A must-see attraction in the area";
+  const imageUrl = landmark.imageUrl || generateGooglePlacesImageUrl(landmark.name);
+  const whyVisit = landmark.userNote || generateWhyVisit(landmark);
 
   return (
     <Modal
@@ -74,36 +173,42 @@ export default function LandmarkDetailModal({
             <X size={24} color="#1F2937" />
           </TouchableOpacity>
 
-          {landmark.imageUrl && (
+          <ScrollView showsVerticalScrollIndicator={false}>
             <Image
-              source={{ uri: landmark.imageUrl }}
+              source={{ uri: imageUrl }}
               style={styles.image}
               resizeMode="cover"
             />
-          )}
 
-          <View style={styles.contentPadding}>
-            <Text style={styles.title}>{landmark.name}</Text>
-            
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>About</Text>
-              <Text style={styles.description}>{landmark.description}</Text>
+            <View style={styles.contentPadding}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{landmark.name}</Text>
+                <View style={styles.distanceBadge}>
+                  <MapPin size={14} color={Colors.light.primary} />
+                  <Text style={styles.distanceText}>{formatDistance(distance)}</Text>
+                </View>
+              </View>
+              
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>About</Text>
+                <Text style={styles.description}>{landmark.description}</Text>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Why Visit</Text>
+                <Text style={styles.whyVisit}>{whyVisit}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.directionsButton}
+                onPress={handleGetDirections}
+                activeOpacity={0.8}
+              >
+                <Navigation size={22} color="#fff" />
+                <Text style={styles.directionsButtonText}>Get Directions</Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Why Visit</Text>
-              <Text style={styles.whyVisit}>{whyVisit}</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.directionsButton}
-              onPress={handleGetDirections}
-              activeOpacity={0.8}
-            >
-              <Navigation size={22} color="#fff" />
-              <Text style={styles.directionsButtonText}>Start Directions</Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -127,7 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "80%",
+    maxHeight: "85%",
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -159,40 +264,62 @@ const styles = StyleSheet.create({
   },
   image: {
     width: "100%",
-    height: 200,
+    height: 240,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    backgroundColor: Colors.light.backgroundSecondary,
   },
   contentPadding: {
-    padding: 28,
+    padding: 24,
+  },
+  titleRow: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 20,
+    gap: 12,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "700" as const,
     color: "#1F2937",
-    marginBottom: 24,
-    lineHeight: 32,
+    lineHeight: 30,
+    flex: 1,
+  },
+  distanceBadge: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  distanceText: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: Colors.light.primary,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700" as const,
     color: "#6B7280",
     textTransform: "uppercase" as const,
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#4B5563",
-    lineHeight: 24,
+    lineHeight: 22,
   },
   whyVisit: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#374151",
-    lineHeight: 24,
+    lineHeight: 22,
     fontWeight: "500" as const,
   },
   directionsButton: {
@@ -200,11 +327,11 @@ const styles = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 18,
-    paddingHorizontal: 28,
-    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
     gap: 10,
-    marginTop: 8,
+    marginTop: 4,
     shadowColor: Colors.light.primary,
     shadowOffset: {
       width: 0,
@@ -216,7 +343,7 @@ const styles = StyleSheet.create({
   },
   directionsButtonText: {
     color: "#fff",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700" as const,
     letterSpacing: 0.3,
   },
