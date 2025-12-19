@@ -1832,7 +1832,7 @@ const styles = StyleSheet.create({
     top: "50%",
     left: "50%",
     transform: [{ translateX: -175 }, { translateY: -175 }],
-    opacity: 0.08,
+    opacity: 0.15,
     zIndex: 0,
   },
   orbitalContainer: {
