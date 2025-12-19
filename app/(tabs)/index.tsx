@@ -916,7 +916,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
       <View style={styles.welcomeGlobeContainer}>
         <Image 
-          source={{ uri: "https://r2-pub.rork.com/generated-images/7e619286-b2e7-4909-8984-538526bc30ae.png" }} 
+          source={{ uri: "https://r2-pub.rork.com/generated-images/80af0d67-8f82-4404-bff0-53a50a329173.png" }} 
           style={styles.welcomeGlobeImage}
           resizeMode="contain"
         />
