@@ -923,7 +923,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
       let audioUrl: string = '';
       
-      const splitTextIntoChunks = (text: string, maxChars: number = 4000): string[] => {
+      const splitTextIntoChunks = (text: string, maxChars: number = 2900): string[] => {
         const chunks: string[] = [];
         const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
         

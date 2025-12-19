@@ -2,7 +2,7 @@ import { z } from "zod";
 import { publicProcedure } from "@/backend/trpc/create-context";
 
 const ttsGenerateSchema = z.object({
-  text: z.string().max(3000, "Text too long for TTS (max 3000 chars)"),
+  text: z.string().max(4000, "Text too long for TTS (max 4000 chars)"),
   voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional().default("alloy"),
   speed: z.number().min(0.25).max(4.0).optional().default(1.0),
 });
