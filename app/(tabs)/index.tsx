@@ -464,7 +464,7 @@ For ${location}, return topics as JSON array:`;
 
   const renderOrbitalBackground = () => {
     const { width } = Dimensions.get('window');
-    const size = Math.min(width * 0.8, 350);
+    const size = Math.min(width * 1.2, 500);
 
     return (
       <View style={[styles.orbitalContainer, { width: size, height: size }]}>
@@ -480,6 +480,7 @@ For ${location}, return topics as JSON array:`;
               height: size * 0.5,
               borderRadius: size * 0.25,
               transform: [{ rotate: spin1 }],
+              opacity: 1,
             },
           ]}
         >
@@ -495,6 +496,7 @@ For ${location}, return topics as JSON array:`;
               height: size * 0.7,
               borderRadius: size * 0.35,
               transform: [{ rotate: spin2 }],
+              opacity: 0.7,
             },
           ]}
         >
@@ -511,6 +513,7 @@ For ${location}, return topics as JSON array:`;
               height: size,
               borderRadius: size * 0.5,
               transform: [{ rotate: spin3 }],
+              opacity: 0.4,
             },
           ]}
         >
@@ -1821,10 +1824,13 @@ const styles = StyleSheet.create({
   },
   backgroundOrbital: {
     position: "absolute" as const,
-    top: "50%",
-    left: "50%",
-    transform: [{ translateX: -175 }, { translateY: -175 }],
-    opacity: 0.15,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.075,
     zIndex: 0,
   },
   orbitalContainer: {
