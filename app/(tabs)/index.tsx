@@ -483,10 +483,10 @@ For ${location}, return topics as JSON array:`;
           ]}
         >
           <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={16} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={19} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={16} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={19} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
         </Animated.View>
 
@@ -503,13 +503,13 @@ For ${location}, return topics as JSON array:`;
           ]}
         >
           <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotRight]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
         </Animated.View>
 
@@ -526,16 +526,16 @@ For ${location}, return topics as JSON array:`;
           ]}
         >
           <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotRight]}>
-            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
           <View style={[styles.planeIcon, styles.dotLeft]}>
-            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
           </View>
         </Animated.View>
       </View>
@@ -1049,7 +1049,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.welcomeTitle}>Explore Your City With Custom Audio Tours</Text>
+        <Text style={styles.welcomeTitle}>Explore More With custom AI tours</Text>
         <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
         <TouchableOpacity
           style={styles.ctaButton}
@@ -1513,7 +1513,7 @@ const styles = StyleSheet.create({
   welcomeContent: {
     zIndex: 1,
     alignItems: "center",
-    gap: 16,
+    gap: 20,
     width: "100%",
     marginTop: 200,
   },
@@ -1861,15 +1861,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: 8,
-    width: 140,
-    height: 140,
+    marginBottom: 12,
+    width: 182,
+    height: 182,
     alignItems: "center",
     justifyContent: "center",
   },
   passportMascotImage: {
-    width: 140,
-    height: 140,
+    width: 182,
+    height: 182,
   },
   orbit: {
     position: "absolute" as const,
