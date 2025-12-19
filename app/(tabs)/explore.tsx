@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Sparkles, ChevronsUp, User as UserIcon, Globe } from "lucide-react-native";
+import { Plus, MapPin, Sparkles, User as UserIcon, Globe } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
@@ -214,17 +214,6 @@ export default function ExploreScreen() {
     setIsModalVisible(true);
   };
 
-  const toggleBottomSheet = () => {
-    const newExpanded = !isExpanded;
-    setIsExpanded(newExpanded);
-    Animated.spring(bottomSheetHeight, {
-      toValue: newExpanded ? BOTTOM_SHEET_MAX_HEIGHT : BOTTOM_SHEET_MIN_HEIGHT,
-      useNativeDriver: false,
-      tension: 50,
-      friction: 8,
-    }).start();
-  };
-
   const handleAddLandmark = (landmark: MapLandmark) => {
     setLandmarks([...landmarks, landmark]);
   };
@@ -373,23 +362,6 @@ export default function ExploreScreen() {
             );
           })}
         </View>
-
-        <TouchableOpacity 
-          onPress={toggleBottomSheet}
-          style={styles.expandButton}
-          activeOpacity={0.7}
-        >
-          <ChevronsUp 
-            size={20} 
-            color={Colors.light.textSecondary}
-            style={{
-              transform: [{ rotate: isExpanded ? "180deg" : "0deg" }],
-            }}
-          />
-          <Text style={styles.expandText}>
-            {isExpanded ? "Show Less" : "Show All"}
-          </Text>
-        </TouchableOpacity>
 
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {landmarks.length === 0 && !discoverQuery.isLoading ? (
@@ -796,19 +768,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.backgroundSecondary,
     borderRadius: 2,
   },
-  expandButton: {
-    flexDirection: "row" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  expandText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.light.textSecondary,
-  },
+
   tabs: {
     flexDirection: "row" as const,
     gap: 8,
