@@ -10,7 +10,6 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
-  Image,
   Dimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1020,12 +1019,8 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderWelcome = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <View style={styles.welcomeGlobeContainer}>
-        <Image 
-          source={{ uri: "https://r2-pub.rork.com/generated-images/e7f0180b-62e5-413d-a599-49a62ae13636.png" }} 
-          style={styles.welcomeGlobeImage}
-          resizeMode="contain"
-        />
+      <View style={styles.backgroundOrbital}>
+        {renderOrbitalBackground()}
       </View>
       <View style={styles.welcomeContent}>
         <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
@@ -1043,9 +1038,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTourType = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <View style={styles.backgroundOrbital}>
-        {renderOrbitalBackground()}
-      </View>
       <Text style={styles.questionTitle}>Choose Your Tour Type</Text>
       <View style={styles.optionsVertical}>
         <TouchableOpacity
