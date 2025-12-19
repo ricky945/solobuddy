@@ -1064,7 +1064,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.welcomeTitle}>Explore More With custom AI tours</Text>
+        <Text style={styles.welcomeTitle}>Explore More With Custom AI Tours</Text>
         <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
         <TouchableOpacity
           style={styles.ctaButton}
@@ -1119,7 +1119,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderLocation = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Where are you exploring?</Text>
+      <Text style={styles.questionTitle}>Where Are You Exploring?</Text>
       <View style={styles.inputWrapper}>
         <View style={styles.inputContainer}>
           <MapPin size={20} color={Colors.light.textSecondary} />
@@ -1170,7 +1170,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTopics = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>What interests you?</Text>
+      <Text style={styles.questionTitle}>What Interests You?</Text>
       <Text style={styles.questionSubtitle}>Select one or more topics</Text>
       <View style={styles.topicsGrid}>
         {TOPICS.map((topic) => {
@@ -1225,7 +1225,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
     return (
       <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-        <Text style={styles.questionTitle}>How long should it be?</Text>
+        <Text style={styles.questionTitle}>How Long Should It Be?</Text>
         <View style={styles.lengthGrid}>
           {lengthsToShow.map((length) => (
             <TouchableOpacity
@@ -1275,7 +1275,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTransport = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>How will you travel?</Text>
+      <Text style={styles.questionTitle}>How Will You Travel?</Text>
       <View style={styles.optionsVertical}>
         {TRANSPORT_METHODS.map((method) => {
           const Icon = iconMap[method.icon as keyof typeof iconMap];
@@ -1315,7 +1315,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderLandmarkDiscovery = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Which landmark are you at?</Text>
+      <Text style={styles.questionTitle}>Which Landmark Are You At?</Text>
       <View style={styles.inputWrapper}>
         <View style={styles.inputContainer}>
           <MapPin size={20} color={Colors.light.textSecondary} />
@@ -1373,7 +1373,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderLandmarkTopics = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Here are some topics that may be relevant</Text>
+      <Text style={styles.questionTitle}>Here Are Some Topics That May Be Relevant</Text>
       <Text style={styles.questionSubtitle}>Please choose a few to include in your audio tour</Text>
       <ScrollView
         style={styles.landmarkTopicsScroll}
@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
     width: "100%",
-    marginTop: 60,
+    marginTop: 20,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -1876,7 +1876,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: 8,
+    marginBottom: 24,
     width: 173,
     height: 173,
     alignItems: "center",
