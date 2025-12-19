@@ -914,20 +914,24 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderWelcome = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Image 
-        source={{ uri: "https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/laveu4s1oij0t2h4rsl79" }} 
-        style={styles.welcomeImage}
-        resizeMode="contain"
-      />
-      <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
-      <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
-      <TouchableOpacity
-        style={styles.ctaButton}
-        activeOpacity={0.85}
-        onPress={() => goToNextStep("tourType")}
-      >
-        <Text style={styles.ctaButtonText}>Create Tour Now</Text>
-      </TouchableOpacity>
+      <View style={styles.welcomeGlobeContainer}>
+        <Image 
+          source={{ uri: "https://r2-pub.rork.com/generated-images/7e619286-b2e7-4909-8984-538526bc30ae.png" }} 
+          style={styles.welcomeGlobeImage}
+          resizeMode="contain"
+        />
+      </View>
+      <View style={styles.welcomeContent}>
+        <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
+        <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
+        <TouchableOpacity
+          style={styles.ctaButton}
+          activeOpacity={0.85}
+          onPress={() => goToNextStep("tourType")}
+        >
+          <Text style={styles.ctaButtonText}>Create Tour Now</Text>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 
@@ -1366,26 +1370,43 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingTop: 8,
   },
-  welcomeImage: {
-    width: 180,
-    height: 180,
-    marginBottom: 8,
+  welcomeGlobeContainer: {
+    position: "absolute" as const,
+    top: -80,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 0,
+    opacity: 0.85,
+  },
+  welcomeGlobeImage: {
+    width: 420,
+    height: 420,
+  },
+  welcomeContent: {
+    zIndex: 1,
+    alignItems: "center",
+    gap: 20,
+    width: "100%",
+    marginTop: 280,
   },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "700",
     color: Colors.light.text,
     textAlign: "center",
-    lineHeight: 36,
-    letterSpacing: -0.5,
+    lineHeight: 40,
+    letterSpacing: -0.8,
+    paddingHorizontal: 20,
   },
   welcomeSubtitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
     marginTop: -12,
-    paddingHorizontal: 32,
-    lineHeight: 22,
+    paddingHorizontal: 40,
+    lineHeight: 24,
+    fontWeight: "500" as const,
   },
   ctaButton: {
     backgroundColor: Colors.light.primary,
