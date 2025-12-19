@@ -933,7 +933,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTourType = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Choose Your Tour Type:</Text>
+      <Text style={styles.questionTitle}>Choose Your Tour Type</Text>
       <View style={styles.optionsVertical}>
         <TouchableOpacity
           style={styles.fullOptionCard}
@@ -944,7 +944,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             <Route size={32} color={Colors.light.primary} />
           </View>
           <Text style={styles.fullOptionTitle}>Create a Custom Walking Tour</Text>
-          <Text style={styles.fullOptionSubtitle}>Plan a route through landmarks</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -956,7 +955,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             <Headphones size={32} color={Colors.light.secondary} />
           </View>
           <Text style={styles.fullOptionTitle}>Create a General Audio Tour</Text>
-          <Text style={styles.fullOptionSubtitle}>For listening only</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -968,7 +966,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             <Landmark size={32} color="#FF6B6B" />
           </View>
           <Text style={styles.fullOptionTitle}>Create a Tour for Your Current Landmark</Text>
-          <Text style={styles.fullOptionSubtitle}>Deep dive into one location</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -1424,8 +1421,11 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     textAlign: "center",
     marginBottom: 28,
-    marginTop: -80,
     letterSpacing: -0.5,
+    position: "absolute" as const,
+    top: 40,
+    left: 0,
+    right: 0,
   },
   questionSubtitle: {
     fontSize: 14,
@@ -1437,13 +1437,14 @@ const styles = StyleSheet.create({
   optionsVertical: {
     width: "100%",
     gap: 16,
+    marginTop: 100,
   },
   fullOptionCard: {
     backgroundColor: Colors.light.card,
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     borderWidth: 1.5,
     borderColor: Colors.light.border,
     ...Platform.select({
