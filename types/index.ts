@@ -1,4 +1,4 @@
-export type TourType = "route" | "immersive";
+export type TourType = "route" | "immersive" | "landmark";
 
 export type Topic =
   | "history"

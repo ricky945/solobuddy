@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  ScrollView,
 } from "react-native";
 import { Audio } from "expo-av";
 import {
@@ -15,7 +16,7 @@ import {
   SkipForward,
   Volume2,
   ChevronDown,
-  List,
+  ChevronUp,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,13 +27,11 @@ import { AudioGuide } from "@/types";
 interface AudioPlayerProps {
   guide: AudioGuide;
   onClose: () => void;
-  onShowChapters?: () => void;
 }
 
 export default function AudioPlayer({
   guide,
   onClose,
-  onShowChapters,
 }: AudioPlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -41,6 +40,7 @@ export default function AudioPlayer({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [audioReady, setAudioReady] = useState<boolean>(false);
   const [audioError, setAudioError] = useState<string>("");
+  const [showChapters, setShowChapters] = useState<boolean>(false);
   
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -319,16 +319,6 @@ export default function AudioPlayer({
           >
             <ChevronDown size={32} color={Colors.light.text} />
           </TouchableOpacity>
-          {guide.type === "route" && (
-            <TouchableOpacity 
-              onPress={onShowChapters} 
-              style={styles.chaptersButton}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-              activeOpacity={0.6}
-            >
-              <List size={28} color={Colors.light.text} />
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={styles.artwork}>
@@ -381,13 +371,74 @@ export default function AudioPlayer({
         </View>
 
         {guide.chapters && guide.chapters.length > 0 && (
-          <View style={styles.currentChapter}>
-            <Text style={styles.chapterLabel}>Now Playing</Text>
-            <Text style={styles.chapterTitle} numberOfLines={1}>
-              {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
-                guide.chapters[0].title}
-            </Text>
-          </View>
+          <>
+            <TouchableOpacity
+              style={styles.currentChapter}
+              activeOpacity={0.7}
+              onPress={() => setShowChapters(!showChapters)}
+            >
+              <View style={styles.chapterInfo}>
+                <Text style={styles.chapterLabel}>Now Playing</Text>
+                <Text style={styles.chapterTitle} numberOfLines={1}>
+                  {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
+                    guide.chapters[0].title}
+                </Text>
+              </View>
+              {showChapters ? (
+                <ChevronDown size={20} color={Colors.light.textSecondary} />
+              ) : (
+                <ChevronUp size={20} color={Colors.light.textSecondary} />
+              )}
+            </TouchableOpacity>
+
+            {showChapters && (
+              <ScrollView
+                style={styles.chaptersScroll}
+                contentContainerStyle={styles.chaptersContainer}
+                showsVerticalScrollIndicator={true}
+              >
+                {guide.chapters.map((chapter, index) => {
+                  const isActive = guide.chapters?.find((c) => c.timestamp * 1000 <= position)?.id === chapter.id;
+                  const isCompleted = chapter.timestamp * 1000 < position;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={chapter.id}
+                      style={[
+                        styles.chapterItem,
+                        isActive && styles.chapterItemActive,
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => handleSeek(chapter.timestamp * 1000)}
+                    >
+                      <View style={styles.chapterNumber}>
+                        <Text style={[
+                          styles.chapterNumberText,
+                          isActive && styles.chapterNumberTextActive,
+                        ]}>
+                          {index + 1}
+                        </Text>
+                      </View>
+                      <View style={styles.chapterContent}>
+                        <Text style={[
+                          styles.chapterItemTitle,
+                          isActive && styles.chapterItemTitleActive,
+                        ]} numberOfLines={2}>
+                          {chapter.title}
+                        </Text>
+                        <Text style={styles.chapterTime}>
+                          {formatTime(chapter.timestamp * 1000)} • {Math.floor(chapter.duration / 60)} min
+                        </Text>
+                      </View>
+                      {isCompleted && !isActive && (
+                        <View style={styles.completedIndicator} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </>
         )}
 
         <View style={styles.controls}>
@@ -523,8 +574,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginVertical: 12,
+  },
+  chapterInfo: {
+    flex: 1,
   },
   chapterLabel: {
     fontSize: 11,
@@ -538,7 +594,68 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: Colors.light.text,
-    textAlign: "center",
+  },
+  chaptersScroll: {
+    maxHeight: 280,
+    width: "100%",
+    marginBottom: 12,
+  },
+  chaptersContainer: {
+    gap: 8,
+    paddingBottom: 8,
+  },
+  chapterItem: {
+    backgroundColor: Colors.light.card,
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+  },
+  chapterItemActive: {
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderColor: Colors.light.primary,
+  },
+  chapterNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.light.backgroundSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chapterNumberText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+  },
+  chapterNumberTextActive: {
+    color: Colors.light.primary,
+  },
+  chapterContent: {
+    flex: 1,
+    gap: 4,
+  },
+  chapterItemTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.light.text,
+  },
+  chapterItemTitleActive: {
+    color: Colors.light.primary,
+  },
+  chapterTime: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontWeight: "500",
+  },
+  completedIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.primary,
   },
   controls: {
     flexDirection: "row",

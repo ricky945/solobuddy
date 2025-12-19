@@ -19,6 +19,7 @@ import {
   Route,
   Headphones,
   BookOpen,
+  Landmark,
   Users,
   Utensils,
   TrendingUp,
@@ -60,14 +61,14 @@ const iconMap = {
   Car,
 };
 
-type FlowStep = "welcome" | "tourType" | "location" | "topics" | "audioLength" | "transport" | "generating";
+type FlowStep = "welcome" | "tourType" | "location" | "landmarkDiscovery" | "landmarkTopicsLoading" | "landmarkTopics" | "topics" | "audioLength" | "transport" | "generating";
 
 export default function ExploreScreen() {
   const router = useRouter();
   const { addTour } = useTours();
   const { incrementToursCreated } = useUser();
   const [flowStep, setFlowStep] = useState<FlowStep>("welcome");
-  const [tourType, setTourType] = useState<"route" | "immersive" | null>(null);
+  const [tourType, setTourType] = useState<"route" | "immersive" | "landmark" | null>(null);
   const [location, setLocation] = useState<string>("");
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
@@ -75,6 +76,8 @@ export default function ExploreScreen() {
   const [transportMethod, setTransportMethod] = useState<TransportMethod>("walking");
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
   const [generationProgress, setGenerationProgress] = useState<string>("");
+  const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
+  const [selectedLandmarkTopics, setSelectedLandmarkTopics] = useState<string[]>([]);
   
   const generateTTSMutation = trpc.tts.generate.useMutation();
   
@@ -102,11 +105,25 @@ export default function ExploreScreen() {
       case "location":
         setFlowStep("tourType");
         break;
+      case "landmarkDiscovery":
+        setFlowStep("tourType");
+        break;
+      case "landmarkTopics":
+        setFlowStep("landmarkDiscovery");
+        break;
       case "topics":
-        setFlowStep("location");
+        if (tourType === "landmark") {
+          setFlowStep("landmarkTopics");
+        } else {
+          setFlowStep("location");
+        }
         break;
       case "audioLength":
-        setFlowStep("topics");
+        if (tourType === "landmark") {
+          setFlowStep("landmarkTopics");
+        } else {
+          setFlowStep("topics");
+        }
         break;
       case "transport":
         setFlowStep("audioLength");
@@ -128,9 +145,13 @@ export default function ExploreScreen() {
     fadeAnim.setValue(0);
   };
 
-  const handleTourTypeSelection = (type: "route" | "immersive") => {
+  const handleTourTypeSelection = (type: "route" | "immersive" | "landmark") => {
     setTourType(type);
-    goToNextStep("location");
+    if (type === "landmark") {
+      goToNextStep("landmarkDiscovery");
+    } else {
+      goToNextStep("location");
+    }
   };
 
   const toggleTopic = (topicId: Topic) => {
@@ -261,9 +282,147 @@ export default function ExploreScreen() {
     setLocationCoords(null);
   };
 
+  const findNearestLandmark = async () => {
+    setIsGettingLocation(true);
+    console.log("[Landmark Discovery] Finding nearest landmark...");
+
+    try {
+      let coords = locationCoords;
+      
+      if (!coords) {
+        if (Platform.OS === "web") {
+          const position: any = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 10000,
+            });
+          });
+          coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission Denied", "Location permission is required.");
+            setIsGettingLocation(false);
+            return;
+          }
+          const currentLocation = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          coords = { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude };
+        }
+        setLocationCoords(coords);
+      }
+
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() || "";
+      const response = await fetch(
+        "https://places.googleapis.com/v1/places:searchNearby",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.types,places.editorialSummary",
+          },
+          body: JSON.stringify({
+            includedTypes: ["museum", "tourist_attraction", "art_gallery", "church", "park", "landmark"],
+            maxResultCount: 5,
+            locationRestriction: {
+              circle: {
+                center: { latitude: coords.latitude, longitude: coords.longitude },
+                radius: 500,
+              },
+            },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const places = data.places || [];
+
+      if (places.length > 0) {
+        const nearest = places[0];
+        const landmarkName = nearest.displayName?.text || "Unknown Landmark";
+        setLocation(landmarkName);
+        console.log("[Landmark Discovery] Found:", landmarkName);
+      } else {
+        Alert.alert(
+          "No Landmark Found",
+          "We couldn't find a major landmark nearby. Please enter one manually."
+        );
+      }
+    } catch (error) {
+      console.error("[Landmark Discovery] Error:", error);
+      Alert.alert("Error", "Failed to find nearby landmarks. Please try again.");
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
+
+  const loadTopicsForLandmark = async () => {
+    if (!location.trim()) return;
+    
+    goToNextStep("landmarkTopicsLoading");
+    console.log("[Topic Generation] Loading topics for:", location);
+
+    try {
+      const prompt = `You are a travel expert. Generate 8-12 relevant topics for an audio tour about "${location}". 
+      
+Return ONLY a JSON array of topic strings. Each topic should be:
+      - Specific and relevant to this location
+      - Suitable for a 20-40 minute audio tour
+      - Interesting and educational
+      - Written as a short phrase (2-5 words)
+      
+Examples for British Museum: ["Origins of the Museum", "King Tut's Treasures", "Rosetta Stone Story", "Greek Sculptures", "Egyptian Mummies", "Controversial Acquisitions"]
+      
+For ${location}, return topics as JSON array:`;
+
+      const response = await generateText({
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      console.log("[Topic Generation] Response:", response);
+
+      let topics: string[] = [];
+      try {
+        const jsonMatch = response.match(/\[([\s\S]*?)\]/);
+        if (jsonMatch) {
+          topics = JSON.parse(jsonMatch[0]);
+        }
+      } catch (parseError) {
+        console.error("[Topic Generation] Parse error:", parseError);
+        topics = [
+          "History and Origins",
+          "Architecture",
+          "Cultural Significance",
+          "Famous Events",
+          "Notable Figures",
+          "Modern Day",
+        ];
+      }
+
+      console.log("[Topic Generation] Generated topics:", topics);
+      setSuggestedTopics(topics);
+      goToNextStep("landmarkTopics");
+    } catch (error) {
+      console.error("[Topic Generation] Error:", error);
+      Alert.alert("Error", "Failed to generate topics. Please try again.");
+      goToPreviousStep();
+    }
+  };
+
+  const toggleLandmarkTopic = (topic: string) => {
+    setSelectedLandmarkTopics((prev) =>
+      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic]
+    );
+  };
+
   const canProceedFromLocation = location.trim() !== "";
   const canProceedFromTopics = selectedTopics.length > 0;
-  const canGenerate = location.trim() !== "" && selectedTopics.length > 0;
+  const canGenerate = tourType === "landmark" 
+    ? location.trim() !== "" && selectedLandmarkTopics.length > 0
+    : location.trim() !== "" && selectedTopics.length > 0;
 
   const handleGenerate = async () => {
     if (!canGenerate || !tourType) {
@@ -286,7 +445,61 @@ export default function ExploreScreen() {
       const currentYear = currentDate.getFullYear();
       const season = currentDate.getMonth() >= 2 && currentDate.getMonth() <= 4 ? "spring" : currentDate.getMonth() >= 5 && currentDate.getMonth() <= 7 ? "summer" : currentDate.getMonth() >= 8 && currentDate.getMonth() <= 10 ? "fall" : "winter";
 
-      const systemPrompt = `=== AUDIO TOUR GENERATION SYSTEM ===
+      const topicsToUse = tourType === "landmark" ? selectedLandmarkTopics : selectedTopics;
+      const topicsString = topicsToUse.join(", ");
+
+      const systemPrompt = tourType === "landmark" 
+        ? `=== LANDMARK AUDIO TOUR GENERATION SYSTEM ===
+
+You are a world-class museum guide and historian creating an in-depth, engaging audio tour about a specific landmark. Your narration is passionate, informative, and story-driven.
+
+=== CORE PRINCIPLES ===
+
+1. DEEP DIVE INTO THE LOCATION
+   - This is about ONE specific place: ${location}
+   - Go deep into its history, architecture, significance, and stories
+   - Connect the selected topics to the landmark's narrative
+   - Each topic should be a distinct chapter with its own story arc
+
+2. CHAPTER-BASED STRUCTURE
+   - Each selected topic becomes a clear chapter
+   - Give each chapter a compelling title
+   - Include timestamps for chapter transitions
+   - Smooth transitions between chapters
+
+3. RICH STORYTELLING
+   - Use vivid descriptions and sensory details
+   - Share anecdotes, legends, and lesser-known facts
+   - Bring historical figures and events to life
+   - Include specific dates, measurements, and data points
+
+4. CONVERSATIONAL TONE
+   - Direct address to the listener
+   - Rhetorical questions to engage
+   - "Imagine..." and "Picture this..." to create scenes
+   - Balance facts with narrative flow
+
+=== TOUR PARAMETERS ===
+
+- Landmark: ${location}
+- Duration: ${audioLength} minutes
+- Selected Topics: ${topicsString}
+- Current Season: ${season} (${currentMonth} ${currentYear})
+
+=== CRITICAL RULES ===
+
+- Focus ENTIRELY on ${location}
+- Each of the ${selectedLandmarkTopics.length} topics should be a clear chapter
+- Include specific historical dates, dimensions, and facts
+- Reference current season and any relevant events
+- NO generic travel advice
+- Target length: ~${audioLength * 150} words
+- Create natural chapter breaks aligned with topics
+
+=== YOUR MISSION ===
+
+Create an immersive, educational audio tour that makes ${location} come alive through the selected topics.`
+        : `=== AUDIO TOUR GENERATION SYSTEM ===
 
 You are a world-class travel guide creating immersive, fast-paced audio tours. Your narration is energetic, data-driven, and conversational—like a knowledgeable friend who cuts through the fluff.
 
@@ -358,7 +571,7 @@ You are a world-class travel guide creating immersive, fast-paced audio tours. Y
 
 - Location: ${location}
 - Duration: ${audioLength} minutes
-- Topics: ${selectedTopics.join(", ")}
+- Topics: ${topicsString}
 - Type: ${tourType === "route" ? "Route with navigation" : "Immersive listening"}
 - Current Season: ${season} (${currentMonth} ${currentYear})
 ${tourType === "route" ? `- Transport: ${transportMethod}` : ""}
@@ -392,7 +605,20 @@ Create an audio tour that's data-rich, fast-paced, seasonally aware, and uses re
       const numLandmarks = tourType === "route" ? Math.floor(audioLength / 5) : 0;
       const maxLandmarksForTime = Math.min(Math.max(numLandmarks, 4), 10);
 
-      const userMessage = `Create an audio tour for ${location} covering ${selectedTopics.join(", ")}.
+      const userMessage = tourType === "landmark"
+        ? `Create an in-depth audio tour about ${location} covering these specific topics: ${topicsString}.
+
+Return JSON with:
+- title: Engaging title for the landmark tour
+- description: 2-3 sentence description
+- script: Full detailed spoken script for a ${audioLength}-minute audio tour (~${audioLength * 150} words). Write as if you're standing at ${location} and narrating directly to the visitor. Make it immersive and educational.
+- chapters: Array of ${selectedLandmarkTopics.length} chapters, one for each topic. Each chapter needs:
+  - title: The topic name or engaging chapter title
+  - timestamp: When this chapter starts (in seconds)
+  - duration: How long this chapter lasts (in seconds)
+  
+Make sure chapters align with the selected topics and cover the full ${audioLength}-minute duration.`
+        : `Create an audio tour for ${location} covering ${topicsString}.
 
 Return JSON with:
 - title: Catchy title
@@ -600,7 +826,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           }))
         : undefined;
 
-      const chapters = generatedContent.chapters
+      const chapters = (tourType === "immersive" || tourType === "landmark") && generatedContent.chapters
         ? generatedContent.chapters.map((chapter: any, index: number) => ({
             id: `chapter_${tourId}_${index}`,
             title: chapter.title || chapter.name || `Chapter ${index + 1}`,
@@ -614,12 +840,12 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       const audioGuide: AudioGuide = {
         id: tourId,
         type: tourType,
-        title: generatedContent.title || `${cleanLocation} ${tourType === "route" ? "Route" : "Immersive"} Tour`,
-        description: generatedContent.description || `An engaging ${audioLength}-minute audio tour exploring ${selectedTopics.join(", ")} in ${cleanLocation}.`,
+        title: generatedContent.title || `${cleanLocation} ${tourType === "route" ? "Route" : tourType === "landmark" ? "Landmark" : "Immersive"} Tour`,
+        description: generatedContent.description || `An engaging ${audioLength}-minute audio tour exploring ${topicsString} in ${cleanLocation}.`,
         script: audioScript,
         location: cleanLocation,
         locationCoords: locationCoords || undefined,
-        topics: selectedTopics,
+        topics: tourType === "landmark" ? (selectedLandmarkTopics as any) : selectedTopics,
         areaSpecificity: "city",
         audioLength,
         transportMethod: tourType === "route" ? transportMethod : undefined,
@@ -707,7 +933,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTourType = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>Do you want to:</Text>
+      <Text style={styles.questionTitle}>Choose Your Tour Type:</Text>
       <View style={styles.optionsVertical}>
         <TouchableOpacity
           style={styles.fullOptionCard}
@@ -717,8 +943,8 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           <View style={styles.fullOptionIcon}>
             <Route size={32} color={Colors.light.primary} />
           </View>
-          <Text style={styles.fullOptionTitle}>Walk Around Landmarks</Text>
-          <Text style={styles.fullOptionSubtitle}>With a custom path</Text>
+          <Text style={styles.fullOptionTitle}>Create a Custom Walking Tour</Text>
+          <Text style={styles.fullOptionSubtitle}>Plan a route through landmarks</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -729,8 +955,20 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           <View style={styles.fullOptionIcon}>
             <Headphones size={32} color={Colors.light.secondary} />
           </View>
-          <Text style={styles.fullOptionTitle}>Listen While Doing</Text>
-          <Text style={styles.fullOptionSubtitle}>Something else</Text>
+          <Text style={styles.fullOptionTitle}>Create a General Audio Tour</Text>
+          <Text style={styles.fullOptionSubtitle}>For listening only</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.fullOptionCard}
+          activeOpacity={0.85}
+          onPress={() => handleTourTypeSelection("landmark")}
+        >
+          <View style={styles.fullOptionIcon}>
+            <Landmark size={32} color="#FF6B6B" />
+          </View>
+          <Text style={styles.fullOptionTitle}>Create a Tour for Your Current Landmark</Text>
+          <Text style={styles.fullOptionSubtitle}>Deep dive into one location</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -834,54 +1072,63 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     </Animated.View>
   );
 
-  const renderAudioLength = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.questionTitle}>How long should it be?</Text>
-      <View style={styles.lengthGrid}>
-        {AUDIO_LENGTHS.map((length) => (
-          <TouchableOpacity
-            key={length.value}
-            style={[
-              styles.lengthCard,
-              audioLength === length.value && styles.lengthCardSelected,
-            ]}
-            activeOpacity={0.7}
-            onPress={() => setAudioLength(length.value)}
-          >
-            <Clock
-              size={24}
-              color={
-                audioLength === length.value
-                  ? Colors.light.primary
-                  : Colors.light.textSecondary
-              }
-            />
-            <Text
+  const renderAudioLength = () => {
+    const landmarkLengths = [20, 30, 40].map((min) => ({
+      value: min as AudioLength,
+      time: `${min} min`,
+    }));
+    
+    const lengthsToShow = tourType === "landmark" ? landmarkLengths : AUDIO_LENGTHS;
+
+    return (
+      <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+        <Text style={styles.questionTitle}>How long should it be?</Text>
+        <View style={styles.lengthGrid}>
+          {lengthsToShow.map((length) => (
+            <TouchableOpacity
+              key={length.value}
               style={[
-                styles.lengthText,
-                audioLength === length.value && styles.lengthTextSelected,
+                styles.lengthCard,
+                audioLength === length.value && styles.lengthCardSelected,
               ]}
+              activeOpacity={0.7}
+              onPress={() => setAudioLength(length.value)}
             >
-              {length.time}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity
-        style={styles.ctaButton}
-        activeOpacity={0.85}
-        onPress={() => {
-          if (tourType === "route") {
-            goToNextStep("transport");
-          } else {
-            handleGenerate();
-          }
-        }}
-      >
-        <Text style={styles.ctaButtonText}>{tourType === "route" ? "Continue" : "Generate Tour"}</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+              <Clock
+                size={24}
+                color={
+                  audioLength === length.value
+                    ? Colors.light.primary
+                    : Colors.light.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.lengthText,
+                  audioLength === length.value && styles.lengthTextSelected,
+                ]}
+              >
+                {length.time}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={styles.ctaButton}
+          activeOpacity={0.85}
+          onPress={() => {
+            if (tourType === "route") {
+              goToNextStep("transport");
+            } else {
+              handleGenerate();
+            }
+          }}
+        >
+          <Text style={styles.ctaButtonText}>{tourType === "route" ? "Continue" : "Generate Tour"}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
   const renderTransport = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
@@ -923,6 +1170,111 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     </Animated.View>
   );
 
+  const renderLandmarkDiscovery = () => (
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+      <Text style={styles.questionTitle}>Which landmark are you at?</Text>
+      <View style={styles.inputWrapper}>
+        <View style={styles.inputContainer}>
+          <MapPin size={20} color={Colors.light.textSecondary} />
+          <TextInput
+            style={styles.input}
+            placeholder="Enter landmark name (e.g. British Museum)"
+            placeholderTextColor={Colors.light.textSecondary}
+            value={location}
+            onChangeText={setLocation}
+            autoFocus
+          />
+          {location && (
+            <TouchableOpacity onPress={() => setLocation("")} style={styles.clearButton}>
+              <X size={18} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.currentLocationButton}
+          activeOpacity={0.7}
+          onPress={findNearestLandmark}
+          disabled={isGettingLocation}
+        >
+          {isGettingLocation ? (
+            <>
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+              <Text style={styles.currentLocationText}>Finding landmark...</Text>
+            </>
+          ) : (
+            <>
+              <Navigation size={18} color={Colors.light.primary} />
+              <Text style={styles.currentLocationText}>Auto-Detect Nearest Landmark</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity
+        style={[styles.ctaButton, !location.trim() && styles.ctaButtonDisabled]}
+        activeOpacity={0.85}
+        disabled={!location.trim()}
+        onPress={loadTopicsForLandmark}
+      >
+        <Text style={styles.ctaButtonText}>Continue</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderLandmarkTopicsLoading = () => (
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+      <ActivityIndicator size="large" color={Colors.light.primary} />
+      <Text style={styles.generatingTitle}>Loading All Available Information</Text>
+      <Text style={styles.generatingText}>Please wait...</Text>
+    </Animated.View>
+  );
+
+  const renderLandmarkTopics = () => (
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+      <Text style={styles.questionTitle}>Here are some topics that may be relevant</Text>
+      <Text style={styles.questionSubtitle}>Please choose a few to include in your audio tour</Text>
+      <ScrollView
+        style={styles.landmarkTopicsScroll}
+        contentContainerStyle={styles.landmarkTopicsContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {suggestedTopics.map((topic, index) => {
+          const isSelected = selectedLandmarkTopics.includes(topic);
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.landmarkTopicBubble,
+                isSelected && styles.landmarkTopicBubbleSelected,
+              ]}
+              activeOpacity={0.7}
+              onPress={() => toggleLandmarkTopic(topic)}
+            >
+              <Text
+                style={[
+                  styles.landmarkTopicText,
+                  isSelected && styles.landmarkTopicTextSelected,
+                ]}
+              >
+                {topic}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      <TouchableOpacity
+        style={[
+          styles.ctaButton,
+          selectedLandmarkTopics.length === 0 && styles.ctaButtonDisabled,
+        ]}
+        activeOpacity={0.85}
+        disabled={selectedLandmarkTopics.length === 0}
+        onPress={() => goToNextStep("audioLength")}
+      >
+        <Text style={styles.ctaButtonText}>Continue</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
   const renderGenerating = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -942,6 +1294,12 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         return renderTourType();
       case "location":
         return renderLocation();
+      case "landmarkDiscovery":
+        return renderLandmarkDiscovery();
+      case "landmarkTopicsLoading":
+        return renderLandmarkTopicsLoading();
+      case "landmarkTopics":
+        return renderLandmarkTopics();
       case "topics":
         return renderTopics();
       case "audioLength":
@@ -955,7 +1313,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     }
   };
 
-  const showBackButton = flowStep !== "welcome" && flowStep !== "generating";
+  const showBackButton = flowStep !== "welcome" && flowStep !== "generating" && flowStep !== "landmarkTopicsLoading";
 
   return (
     <LinearGradient
@@ -1309,5 +1667,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: Colors.light.text,
+  },
+  landmarkTopicsScroll: {
+    width: "100%",
+    maxHeight: 400,
+  },
+  landmarkTopicsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    paddingVertical: 8,
+    justifyContent: "center",
+  },
+  landmarkTopicBubble: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: Colors.light.card,
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+  },
+  landmarkTopicBubbleSelected: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  landmarkTopicText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.light.text,
+  },
+  landmarkTopicTextSelected: {
+    color: Colors.light.background,
   },
 });
