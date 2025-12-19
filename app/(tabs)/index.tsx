@@ -1555,7 +1555,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
   );
 
   const renderGenerating = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
       {generationProgress && (
