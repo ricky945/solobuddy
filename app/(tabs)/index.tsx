@@ -32,6 +32,7 @@ import {
   Navigation,
   X,
   ChevronLeft,
+  Plane,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -468,10 +469,6 @@ For ${location}, return topics as JSON array:`;
 
     return (
       <View style={[styles.orbitalContainer, { width: size, height: size }]}>
-        <View style={styles.passportCenter}>
-          <BookOpen size={40} color={Colors.light.primary} strokeWidth={1.5} />
-        </View>
-
         <Animated.View
           style={[
             styles.orbit,
@@ -484,8 +481,12 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.dot, styles.dotTop]} />
-          <View style={[styles.dot, styles.dotBottom]} />
+          <View style={[styles.planeIcon, styles.dotTop]}>
+            <Plane size={16} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotBottom]}>
+            <Plane size={16} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
         </Animated.View>
 
         <Animated.View
@@ -500,9 +501,15 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.dot, styles.dotTop]} />
-          <View style={[styles.dot, styles.dotRight]} />
-          <View style={[styles.dot, styles.dotBottom]} />
+          <View style={[styles.planeIcon, styles.dotTop]}>
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotRight]}>
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotBottom]}>
+            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
         </Animated.View>
 
         <Animated.View
@@ -517,10 +524,18 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.dot, styles.dotTop]} />
-          <View style={[styles.dot, styles.dotRight]} />
-          <View style={[styles.dot, styles.dotBottom]} />
-          <View style={[styles.dot, styles.dotLeft]} />
+          <View style={[styles.planeIcon, styles.dotTop]}>
+            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotRight]}>
+            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotBottom]}>
+            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
+          <View style={[styles.planeIcon, styles.dotLeft]}>
+            <Plane size={12} color={Colors.light.primary} fill={Colors.light.primary} />
+          </View>
         </Animated.View>
       </View>
     );
@@ -1026,6 +1041,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         {renderOrbitalBackground()}
       </View>
       <View style={styles.welcomeContent}>
+        <View style={styles.passportMascot}>
+          <BookOpen size={72} color={Colors.light.primary} strokeWidth={1.5} />
+        </View>
         <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
         <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
         <TouchableOpacity
@@ -1490,9 +1508,9 @@ const styles = StyleSheet.create({
   welcomeContent: {
     zIndex: 1,
     alignItems: "center",
-    gap: 20,
+    gap: 16,
     width: "100%",
-    marginTop: 280,
+    marginTop: 200,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -1830,22 +1848,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
-    opacity: 0.075,
+    opacity: 0.0975,
     zIndex: 0,
   },
   orbitalContainer: {
     alignItems: "center",
     justifyContent: "center",
   },
-  passportCenter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.light.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "absolute" as const,
-    zIndex: 10,
+  passportMascot: {
+    marginBottom: 8,
   },
   orbit: {
     position: "absolute" as const,
@@ -1853,31 +1864,29 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.primary,
     borderStyle: "solid" as const,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.primary,
+  planeIcon: {
     position: "absolute" as const,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dotTop: {
-    top: -4,
+    top: -8,
     left: "50%",
-    transform: [{ translateX: -4 }],
+    transform: [{ translateX: -8 }],
   },
   dotBottom: {
-    bottom: -4,
+    bottom: -8,
     left: "50%",
-    transform: [{ translateX: -4 }],
+    transform: [{ translateX: -8 }],
   },
   dotLeft: {
-    left: -4,
+    left: -8,
     top: "50%",
-    transform: [{ translateY: -4 }],
+    transform: [{ translateY: -8 }],
   },
   dotRight: {
-    right: -4,
+    right: -8,
     top: "50%",
-    transform: [{ translateY: -4 }],
+    transform: [{ translateY: -8 }],
   },
 });
