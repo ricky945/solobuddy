@@ -18,7 +18,7 @@ const saveTourSchema = z.object({
       z.enum(["history", "culture", "food", "economics", "art", "architecture"])
     ),
     areaSpecificity: z.enum(["city", "region", "country"]),
-    audioLength: z.union([z.literal(20), z.literal(40), z.literal(120), z.literal(240)]),
+    audioLength: z.union([z.literal(20), z.literal(40), z.literal(60)]),
     transportMethod: z.enum(["walking", "walking_transit", "walking_car"]).optional(),
     audioUrl: z.string(),
     duration: z.number(),

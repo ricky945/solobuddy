@@ -10,7 +10,7 @@ export type Topic =
 
 export type AreaSpecificity = "city" | "region" | "country";
 
-export type AudioLength = 20 | 40 | 120 | 240;
+export type AudioLength = 20 | 40 | 60;
 
 export type TransportMethod = "walking" | "walking_transit" | "walking_car";
 

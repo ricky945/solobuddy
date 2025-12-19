@@ -14,8 +14,7 @@ export const TOPICS = [
 export const AUDIO_LENGTHS = [
   { value: 20 as const, label: "20 minutes", time: "20 min" },
   { value: 40 as const, label: "40 minutes", time: "40 min" },
-  { value: 120 as const, label: "2 hours", time: "2 hrs" },
-  { value: 240 as const, label: "4 hours", time: "4 hrs" },
+  { value: 60 as const, label: "1 hour", time: "1 hr" },
 ];
 
 export const AREA_SPECIFICITY = [
