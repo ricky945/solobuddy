@@ -1049,7 +1049,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.welcomeTitle}>Create Your Custom AI Audio Tour</Text>
+        <Text style={styles.welcomeTitle}>Explore Your City With Custom Audio Tours</Text>
         <Text style={styles.welcomeSubtitle}>Draw from dozens of academic & verified sources</Text>
         <TouchableOpacity
           style={styles.ctaButton}
