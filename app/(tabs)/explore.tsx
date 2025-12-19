@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Utensils, Sparkles, ChevronsUp, User as UserIcon, Globe } from "lucide-react-native";
+import { Plus, MapPin, Sparkles, ChevronsUp, User as UserIcon, Globe } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
@@ -25,7 +25,7 @@ import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
 import { useUser } from "@/contexts/UserContext";
 
-type LocationTab = "touristic" | "restaurant" | "unique";
+type LocationTab = "touristic" | "unique";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const BOTTOM_SHEET_MIN_HEIGHT = 280;
@@ -233,8 +233,6 @@ export default function ExploreScreen() {
     switch (type) {
       case "touristic":
         return Colors.light.primary;
-      case "restaurant":
-        return "#F59E0B";
       case "unique":
         return "#10B981";
       default:
@@ -246,8 +244,6 @@ export default function ExploreScreen() {
     switch (tab) {
       case "touristic":
         return MapPin;
-      case "restaurant":
-        return Utensils;
       case "unique":
         return Sparkles;
     }
@@ -257,8 +253,6 @@ export default function ExploreScreen() {
     switch (tab) {
       case "touristic":
         return Colors.light.primary;
-      case "restaurant":
-        return "#F59E0B";
       case "unique":
         return "#10B981";
     }
@@ -268,8 +262,6 @@ export default function ExploreScreen() {
     switch (tab) {
       case "touristic":
         return "Tourist Sites";
-      case "restaurant":
-        return "Restaurants";
       case "unique":
         return "Hidden Gems";
     }
@@ -362,7 +354,7 @@ export default function ExploreScreen() {
         </View>
 
         <View style={styles.tabs}>
-          {(["touristic", "restaurant", "unique"] as LocationTab[]).map((tab) => {
+          {(["touristic", "unique"] as LocationTab[]).map((tab) => {
             const Icon = getTabIcon(tab);
             const active = activeTab === tab;
             const color = getTabColor(tab);
