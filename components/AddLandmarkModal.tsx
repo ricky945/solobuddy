@@ -14,7 +14,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from "react-native";
-import { X, MapPin, Camera } from "lucide-react-native";
+import { X, Camera } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { trpc } from "@/lib/trpc";
@@ -36,7 +36,7 @@ export default function AddLandmarkModal({
   onAdd,
   coordinates,
 }: AddLandmarkModalProps) {
-  const [selectedType, setSelectedType] = useState<"unique" | "restaurant" | null>(null);
+  const [selectedType, setSelectedType] = useState<"unique" | null>(null);
   const [locationName, setLocationName] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [images, setImages] = useState<string[]>([]);
@@ -80,7 +80,7 @@ export default function AddLandmarkModal({
   }, [coordinates.latitude, coordinates.longitude]);
 
   useEffect(() => {
-    if (visible && selectedType === "restaurant") {
+    if (visible && selectedType === "unique") {
       fetchLocationName();
     }
   }, [visible, selectedType, fetchLocationName]);
@@ -104,7 +104,7 @@ export default function AddLandmarkModal({
     }
   }, [visible]);
 
-  const handleTypeSelect = (type: "unique" | "restaurant") => {
+  const handleTypeSelect = (type: "unique") => {
     setSelectedType(type);
   };
 
@@ -139,8 +139,8 @@ export default function AddLandmarkModal({
       return;
     }
 
-    if (selectedType !== "unique" && selectedType !== "restaurant") {
-      Alert.alert("Invalid Type", "Landmark type must be unique or restaurant");
+    if (selectedType !== "unique") {
+      Alert.alert("Invalid Type", "Landmark type must be unique");
       return;
     }
 
@@ -207,40 +207,20 @@ export default function AddLandmarkModal({
             </View>
 
             <View style={styles.typeSelection}>
-              <Text style={styles.sectionTitle}>What type of landmark?</Text>
+              <Text style={styles.sectionTitle}>Add a Hidden Gem</Text>
+              <Text style={styles.sectionDescription}>
+                Share a unique spot worth visiting that others might not know about
+              </Text>
 
               <TouchableOpacity
-                style={styles.typeCard}
+                style={styles.continueButton}
                 onPress={() => {
                   console.log('[AddLandmark] Selected type: unique');
                   handleTypeSelect("unique");
                 }}
-                activeOpacity={0.7}
+                activeOpacity={0.85}
               >
-                <View style={[styles.typeIcon, { backgroundColor: "#10B981" }]}>
-                  <MapPin size={28} color="#fff" />
-                </View>
-                <Text style={styles.typeTitle}>Unique Place</Text>
-                <Text style={styles.typeDescription}>
-                  A hidden gem or unique spot worth visiting
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.typeCard}
-                onPress={() => {
-                  console.log('[AddLandmark] Selected type: restaurant');
-                  handleTypeSelect("restaurant");
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.typeIcon, { backgroundColor: "#F59E0B" }]}>
-                  <MapPin size={28} color="#fff" />
-                </View>
-                <Text style={styles.typeTitle}>Restaurant</Text>
-                <Text style={styles.typeDescription}>
-                  A great place to eat or drink
-                </Text>
+                <Text style={styles.continueButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -275,24 +255,9 @@ export default function AddLandmarkModal({
             contentContainerStyle={styles.scrollViewContent}
           >
             <View style={styles.formContainer}>
-              <View
-                style={[
-                  styles.typeBadge,
-                  {
-                    backgroundColor:
-                      selectedType === "restaurant" ? "#FEF3C7" : "#D1FAE5",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.typeBadgeText,
-                    {
-                      color: selectedType === "restaurant" ? "#D97706" : "#059669",
-                    },
-                  ]}
-                >
-                  {selectedType === "restaurant" ? "RESTAURANT" : "UNIQUE PLACE"}
+              <View style={[styles.typeBadge, { backgroundColor: "#D1FAE5" }]}>
+                <Text style={[styles.typeBadgeText, { color: "#059669" }]}>
+                  HIDDEN GEM
                 </Text>
               </View>
 
@@ -391,6 +356,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 20,
+    zIndex: 10,
   },
   modalContentTall: {
     maxHeight: "92%",
@@ -539,5 +505,30 @@ const styles = StyleSheet.create({
   },
   formModal: {
     paddingBottom: 40,
+    zIndex: 10,
+  },
+  sectionDescription: {
+    fontSize: 15,
+    color: Colors.light.textSecondary,
+    lineHeight: 22,
+    marginTop: -8,
+  },
+  continueButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  continueButtonText: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "600" as const,
+    letterSpacing: 0.2,
   },
 });
