@@ -482,11 +482,11 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={19} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={22} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={19} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={22} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
         </Animated.View>
 
@@ -502,14 +502,14 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotRight]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
         </Animated.View>
 
@@ -525,17 +525,17 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotRight]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotBottom]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
-          <View style={[styles.planeIcon, styles.dotLeft]}>
-            <Plane size={14} color={Colors.light.primary} fill={Colors.light.primary} rotation={90} />
+          <View style={[styles.planeIcon, styles.dotLeft, { transform: [{ rotate: '90deg' }] }]}>
+            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
           </View>
         </Animated.View>
       </View>
@@ -1515,7 +1515,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
     width: "100%",
-    marginTop: 200,
+    marginTop: 165,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -1861,15 +1861,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: 12,
-    width: 182,
-    height: 182,
+    marginBottom: 8,
+    width: 173,
+    height: 173,
     alignItems: "center",
     justifyContent: "center",
   },
   passportMascotImage: {
-    width: 182,
-    height: 182,
+    width: 173,
+    height: 173,
   },
   orbit: {
     position: "absolute" as const,
