@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Sparkles, User as UserIcon, Globe } from "lucide-react-native";
+import { Plus, MapPin, Utensils, Sparkles, ChevronsUp, User as UserIcon, Globe } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
@@ -25,7 +25,7 @@ import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
 import { useUser } from "@/contexts/UserContext";
 
-type LocationTab = "unique";
+type LocationTab = "touristic" | "restaurant" | "unique";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const BOTTOM_SHEET_MIN_HEIGHT = 280;
@@ -65,7 +65,7 @@ export default function ExploreScreen() {
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
-  const [activeTab] = useState<LocationTab>("unique");
+  const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   
   const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
@@ -214,15 +214,66 @@ export default function ExploreScreen() {
     setIsModalVisible(true);
   };
 
+  const toggleBottomSheet = () => {
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    Animated.spring(bottomSheetHeight, {
+      toValue: newExpanded ? BOTTOM_SHEET_MAX_HEIGHT : BOTTOM_SHEET_MIN_HEIGHT,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 8,
+    }).start();
+  };
+
   const handleAddLandmark = (landmark: MapLandmark) => {
     setLandmarks([...landmarks, landmark]);
   };
 
   const getMarkerColor = (type: string) => {
-    return "#10B981";
+    switch (type) {
+      case "touristic":
+        return Colors.light.primary;
+      case "restaurant":
+        return "#F59E0B";
+      case "unique":
+        return "#10B981";
+      default:
+        return Colors.light.primary;
+    }
   };
 
+  const getTabIcon = (tab: LocationTab) => {
+    switch (tab) {
+      case "touristic":
+        return MapPin;
+      case "restaurant":
+        return Utensils;
+      case "unique":
+        return Sparkles;
+    }
+  };
 
+  const getTabColor = (tab: LocationTab) => {
+    switch (tab) {
+      case "touristic":
+        return Colors.light.primary;
+      case "restaurant":
+        return "#F59E0B";
+      case "unique":
+        return "#10B981";
+    }
+  };
+
+  const getTabLabel = (tab: LocationTab) => {
+    switch (tab) {
+      case "touristic":
+        return "Tourist Sites";
+      case "restaurant":
+        return "Restaurants";
+      case "unique":
+        return "Hidden Gems";
+    }
+  };
 
   if (isLoadingLocation || !location) {
     return (
@@ -310,10 +361,43 @@ export default function ExploreScreen() {
           <View style={styles.handleBar} />
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Sparkles size={20} color="#10B981" />
-          <Text style={styles.sectionTitle}>Hidden Gems</Text>
+        <View style={styles.tabs}>
+          {(["touristic", "restaurant", "unique"] as LocationTab[]).map((tab) => {
+            const Icon = getTabIcon(tab);
+            const active = activeTab === tab;
+            const color = getTabColor(tab);
+            
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tab, active && { backgroundColor: color }]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Icon size={16} color={active ? "#fff" : color} />
+                <Text style={[styles.tabText, active && { color: "#fff" }]}>
+                  {getTabLabel(tab)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        <TouchableOpacity 
+          onPress={toggleBottomSheet}
+          style={styles.expandButton}
+          activeOpacity={0.7}
+        >
+          <ChevronsUp 
+            size={20} 
+            color={Colors.light.textSecondary}
+            style={{
+              transform: [{ rotate: isExpanded ? "180deg" : "0deg" }],
+            }}
+          />
+          <Text style={styles.expandText}>
+            {isExpanded ? "Show Less" : "Show All"}
+          </Text>
+        </TouchableOpacity>
 
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {landmarks.length === 0 && !discoverQuery.isLoading ? (
@@ -720,7 +804,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.backgroundSecondary,
     borderRadius: 2,
   },
-
+  expandButton: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  expandText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+  },
   tabs: {
     flexDirection: "row" as const,
     gap: 8,
@@ -785,18 +881,5 @@ const styles = StyleSheet.create({
   cardDesc: {
     fontSize: 13,
     color: Colors.light.textSecondary,
-  },
-  sectionHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 4,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-    letterSpacing: -0.3,
   },
 });
