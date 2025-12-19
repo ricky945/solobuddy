@@ -11,16 +11,19 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Image,
+  Modal,
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Utensils, Sparkles, ChevronsUp } from "lucide-react-native";
+import { Plus, MapPin, Utensils, Sparkles, ChevronsUp, User as UserIcon, Globe } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
 import { MapLandmark } from "@/types";
 import { trpc } from "@/lib/trpc";
 import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
+import { useUser } from "@/contexts/UserContext";
 
 type LocationTab = "touristic" | "restaurant" | "unique";
 
@@ -55,6 +58,7 @@ function formatDistance(km: number): string {
 }
 
 export default function ExploreScreen() {
+  const { user } = useUser();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(true);
   const [landmarks, setLandmarks] = useState<(MapLandmark & { distance?: number })[]>([]);
@@ -62,6 +66,7 @@ export default function ExploreScreen() {
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   
   const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -306,6 +311,30 @@ export default function ExploreScreen() {
         ))}
       </MapView>
 
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoIcon}>📖</Text>
+          <Text style={styles.logoText}>SoloBuddy</Text>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.profileButton}
+          onPress={() => setShowProfileModal(true)}
+          activeOpacity={0.8}
+        >
+          {user.profile?.profilePictureUrl ? (
+            <Image 
+              source={{ uri: user.profile.profilePictureUrl }} 
+              style={styles.profileImage}
+            />
+          ) : (
+            <View style={styles.profilePlaceholder}>
+              <UserIcon size={24} color={Colors.light.primary} />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {discoverQuery.isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color={Colors.light.primary} />
@@ -434,6 +463,76 @@ export default function ExploreScreen() {
           }}
         />
       )}
+
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <View style={styles.profileModalContainer}>
+          <View style={styles.profileModalHeader}>
+            <Text style={styles.profileModalTitle}>Profile</Text>
+            <TouchableOpacity onPress={() => setShowProfileModal(false)}>
+              <Text style={styles.closeButton}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.profileModalContent}>
+            <View style={styles.profileModalAvatar}>
+              {user.profile?.profilePictureUrl ? (
+                <Image 
+                  source={{ uri: user.profile.profilePictureUrl }} 
+                  style={styles.profileModalImage}
+                />
+              ) : (
+                <View style={styles.profileModalPlaceholder}>
+                  <UserIcon size={48} color={Colors.light.textSecondary} />
+                </View>
+              )}
+            </View>
+            
+            {user.profile?.name && (
+              <>
+                <Text style={styles.profileModalName}>{user.profile.name}</Text>
+                {user.profile.bio && (
+                  <Text style={styles.profileModalBio}>{user.profile.bio}</Text>
+                )}
+                {user.profile.currentCity && (
+                  <View style={styles.profileModalInfo}>
+                    <MapPin size={16} color={Colors.light.textSecondary} />
+                    <Text style={styles.profileModalInfoText}>{user.profile.currentCity}</Text>
+                  </View>
+                )}
+                {user.profile.countriesVisited && user.profile.countriesVisited.length > 0 && (
+                  <View style={styles.profileModalCountries}>
+                    <View style={styles.profileModalInfo}>
+                      <Globe size={16} color={Colors.light.textSecondary} />
+                      <Text style={styles.profileModalInfoText}>
+                        {user.profile.countriesVisited.length} {user.profile.countriesVisited.length === 1 ? 'Country' : 'Countries'} Visited
+                      </Text>
+                    </View>
+                    <View style={styles.countriesList}>
+                      {user.profile.countriesVisited.map((country: string, index: number) => (
+                        <View key={index} style={styles.countryChip}>
+                          <Text style={styles.countryChipText}>{country}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+            
+            {!user.profile?.name && (
+              <View style={styles.noProfileContainer}>
+                <Text style={styles.noProfileText}>No profile information yet</Text>
+                <Text style={styles.noProfileSubtext}>Visit the Account tab to set up your profile</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -444,6 +543,169 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  header: {
+    position: "absolute" as const,
+    top: Platform.OS === "ios" ? 60 : 40,
+    left: 20,
+    right: 20,
+    flexDirection: "row" as const,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  logoContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoIcon: {
+    fontSize: 20,
+  },
+  logoText: {
+    fontSize: 17,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    letterSpacing: -0.3,
+  },
+  profileButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  profileImage: {
+    width: 48,
+    height: 48,
+  },
+  profilePlaceholder: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileModalContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  profileModalHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+    marginTop: Platform.OS === "ios" ? 50 : 20,
+  },
+  profileModalTitle: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  closeButton: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: Colors.light.primary,
+  },
+  profileModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 32,
+  },
+  profileModalAvatar: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  profileModalImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  profileModalPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.light.backgroundSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileModalName: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  profileModalBio: {
+    fontSize: 16,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  profileModalInfo: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    justifyContent: "center",
+  },
+  profileModalInfoText: {
+    fontSize: 15,
+    color: Colors.light.textSecondary,
+    fontWeight: "500" as const,
+  },
+  profileModalCountries: {
+    marginTop: 12,
+  },
+  countriesList: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
+    marginTop: 12,
+    justifyContent: "center",
+  },
+  countryChip: {
+    backgroundColor: Colors.light.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  countryChipText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.light.text,
+  },
+  noProfileContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  noProfileText: {
+    fontSize: 18,
+    fontWeight: "600" as const,
+    color: Colors.light.text,
+    marginBottom: 8,
+  },
+  noProfileSubtext: {
+    fontSize: 15,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
   },
   loadingOverlay: {
     position: "absolute" as const,
