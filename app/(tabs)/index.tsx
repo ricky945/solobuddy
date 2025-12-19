@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
     width: "100%",
-    marginTop: 185,
+    marginTop: 150,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -1876,7 +1876,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: 4,
+    marginBottom: -6,
     width: 173,
     height: 173,
     alignItems: "center",
