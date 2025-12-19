@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
     width: "100%",
-    marginTop: 95,
+    marginTop: 185,
   },
   welcomeTitle: {
     fontSize: 32,
