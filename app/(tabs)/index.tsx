@@ -1876,7 +1876,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: -6,
+    marginBottom: -13,
     width: 173,
     height: 173,
     alignItems: "center",
