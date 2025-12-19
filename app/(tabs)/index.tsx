@@ -1044,7 +1044,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       <View style={styles.welcomeContent}>
         <View style={styles.passportMascot}>
           <Image
-            source={{ uri: 'https://r2-pub.rork.com/generated-images/0b053cc8-ad50-435d-bd48-406d9822595f.png' }}
+            source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/renps5x3u8toqdey782pi' }}
             style={styles.passportMascotImage}
             resizeMode="contain"
           />
