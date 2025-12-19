@@ -80,6 +80,10 @@ export default function ExploreScreen() {
   const [generationProgress, setGenerationProgress] = useState<string>("");
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [selectedLandmarkTopics, setSelectedLandmarkTopics] = useState<string[]>([]);
+  const [placeSuggestions, setPlaceSuggestions] = useState<{ name: string; placeId: string; types: string[] }[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const generateTTSMutation = trpc.tts.generate.useMutation();
   
@@ -311,6 +315,115 @@ export default function ExploreScreen() {
   const clearLocation = () => {
     setLocation("");
     setLocationCoords(null);
+    setPlaceSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const searchPlaces = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setPlaceSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    console.log("[Place Search] Searching for:", query);
+
+    try {
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() || "";
+      
+      let searchCenter = locationCoords;
+      if (!searchCenter && Platform.OS !== "web") {
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === "granted") {
+            const currentLocation = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            searchCenter = {
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+            };
+          }
+        } catch {
+          console.log("[Place Search] Could not get location for search");
+        }
+      }
+
+      const requestBody: any = {
+        textQuery: query,
+        maxResultCount: 5,
+        includedType: "tourist_attraction",
+      };
+
+      if (searchCenter) {
+        requestBody.locationBias = {
+          circle: {
+            center: {
+              latitude: searchCenter.latitude,
+              longitude: searchCenter.longitude,
+            },
+            radius: 50000,
+          },
+        };
+      }
+
+      const response = await fetch(
+        "https://places.googleapis.com/v1/places:searchText",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.types",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      const data = await response.json();
+      const places = data.places || [];
+
+      console.log("[Place Search] Found", places.length, "places");
+
+      const suggestions = places.map((place: any) => ({
+        name: place.displayName?.text || "Unknown",
+        placeId: place.id,
+        types: place.types || [],
+      }));
+
+      setPlaceSuggestions(suggestions);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error("[Place Search] Error:", error);
+      setPlaceSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleLocationTextChange = (text: string) => {
+    setLocation(text);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (text.trim().length >= 2) {
+      searchTimeoutRef.current = setTimeout(() => {
+        searchPlaces(text);
+      }, 500);
+    } else {
+      setPlaceSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (suggestion: { name: string; placeId: string; types: string[] }) => {
+    setLocation(suggestion.name);
+    setShowSuggestions(false);
+    setPlaceSuggestions([]);
+    console.log("[Place Search] Selected:", suggestion.name);
   };
 
   const findNearestLandmark = async () => {
@@ -1324,15 +1437,38 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             placeholder="Enter landmark name (e.g. British Museum)"
             placeholderTextColor={Colors.light.textSecondary}
             value={location}
-            onChangeText={setLocation}
+            onChangeText={handleLocationTextChange}
             autoFocus
           />
           {location && (
-            <TouchableOpacity onPress={() => setLocation("")} style={styles.clearButton}>
+            <TouchableOpacity onPress={clearLocation} style={styles.clearButton}>
               <X size={18} color={Colors.light.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
+        {showSuggestions && placeSuggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {isLoadingSuggestions && (
+              <View style={styles.suggestionLoadingContainer}>
+                <ActivityIndicator size="small" color={Colors.light.primary} />
+              </View>
+            )}
+            {placeSuggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={suggestion.placeId}
+                style={[
+                  styles.suggestionItem,
+                  index === placeSuggestions.length - 1 && styles.suggestionItemLast,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => selectSuggestion(suggestion)}
+              >
+                <Landmark size={18} color={Colors.light.primary} />
+                <Text style={styles.suggestionText}>{suggestion.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <TouchableOpacity
           style={styles.currentLocationButton}
           activeOpacity={0.7}
@@ -1679,6 +1815,47 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.light.primary,
     fontWeight: "600",
+  },
+  suggestionsContainer: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.light.border,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.light.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  suggestionItemLast: {
+    borderBottomWidth: 0,
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.light.text,
+    fontWeight: "500",
+  },
+  suggestionLoadingContainer: {
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   topicsGrid: {
     flexDirection: "row",
