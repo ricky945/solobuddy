@@ -2,15 +2,28 @@ import { z } from "zod";
 import { publicProcedure } from "@/backend/trpc/create-context";
 
 const ttsGenerateSchema = z.object({
-  text: z.string(),
+  text: z.string().max(3000, "Text too long for TTS (max 3000 chars)"),
   voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional().default("alloy"),
   speed: z.number().min(0.25).max(4.0).optional().default(1.0),
 });
 
+function sanitizeText(text: string): string {
+  return text
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+    .replace(/[<>{}\[\]\\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default publicProcedure
   .input(ttsGenerateSchema)
   .mutation(async ({ input }) => {
-    console.log("[Backend TTS] Generating audio, text length:", input.text.length);
+    const sanitizedText = sanitizeText(input.text);
+    console.log("[Backend TTS] Generating audio, original length:", input.text.length, "sanitized:", sanitizedText.length);
+    
+    if (!sanitizedText || sanitizedText.length < 10) {
+      throw new Error("Text too short or invalid after sanitization");
+    }
 
     try {
       const apiKey = (process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
@@ -28,7 +41,7 @@ export default publicProcedure
         },
         body: JSON.stringify({
           model: "tts-1",
-          input: input.text,
+          input: sanitizedText,
           voice: input.voice,
           speed: input.speed,
         }),
@@ -50,6 +63,11 @@ export default publicProcedure
         } catch (parseError) {
           console.error("[Backend TTS] Error parsing API error:", parseError);
         }
+        
+        if (ttsResponse.status === 403 || errorText.includes("Access Denied")) {
+          throw new Error("Access denied. The request may contain invalid characters or be too large. Please try with shorter text.");
+        }
+        
         throw new Error(`TTS API error: ${ttsResponse.status} - ${errorText}`);
       }
 
