@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Dimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
@@ -82,6 +83,9 @@ export default function ExploreScreen() {
   const generateTTSMutation = trpc.tts.generate.useMutation();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const rotateAnim1 = useRef(new Animated.Value(0)).current;
+  const rotateAnim2 = useRef(new Animated.Value(0)).current;
+  const rotateAnim3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -90,6 +94,32 @@ export default function ExploreScreen() {
       useNativeDriver: true,
     }).start();
   }, [flowStep, fadeAnim]);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(rotateAnim1, {
+        toValue: 1,
+        duration: 30000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.timing(rotateAnim2, {
+        toValue: 1,
+        duration: 40000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.timing(rotateAnim3, {
+        toValue: 1,
+        duration: 50000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [rotateAnim1, rotateAnim2, rotateAnim3]);
 
   const goToNextStep = (step: FlowStep) => {
     fadeAnim.setValue(0);
@@ -415,6 +445,82 @@ For ${location}, return topics as JSON array:`;
   const toggleLandmarkTopic = (topic: string) => {
     setSelectedLandmarkTopics((prev) =>
       prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic]
+    );
+  };
+
+  const spin1 = rotateAnim1.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const spin2 = rotateAnim2.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const spin3 = rotateAnim3.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const renderOrbitalBackground = () => {
+    const { width } = Dimensions.get('window');
+    const size = Math.min(width * 0.8, 350);
+
+    return (
+      <View style={[styles.orbitalContainer, { width: size, height: size }]}>
+        <View style={styles.passportCenter}>
+          <BookOpen size={40} color={Colors.light.primary} strokeWidth={1.5} />
+        </View>
+
+        <Animated.View
+          style={[
+            styles.orbit,
+            {
+              width: size * 0.5,
+              height: size * 0.5,
+              borderRadius: size * 0.25,
+              transform: [{ rotate: spin1 }],
+            },
+          ]}
+        >
+          <View style={[styles.dot, styles.dotTop]} />
+          <View style={[styles.dot, styles.dotBottom]} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.orbit,
+            {
+              width: size * 0.7,
+              height: size * 0.7,
+              borderRadius: size * 0.35,
+              transform: [{ rotate: spin2 }],
+            },
+          ]}
+        >
+          <View style={[styles.dot, styles.dotTop]} />
+          <View style={[styles.dot, styles.dotRight]} />
+          <View style={[styles.dot, styles.dotBottom]} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.orbit,
+            {
+              width: size,
+              height: size,
+              borderRadius: size * 0.5,
+              transform: [{ rotate: spin3 }],
+            },
+          ]}
+        >
+          <View style={[styles.dot, styles.dotTop]} />
+          <View style={[styles.dot, styles.dotRight]} />
+          <View style={[styles.dot, styles.dotBottom]} />
+          <View style={[styles.dot, styles.dotLeft]} />
+        </Animated.View>
+      </View>
     );
   };
 
@@ -937,6 +1043,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
   const renderTourType = () => (
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+      <View style={styles.backgroundOrbital}>
+        {renderOrbitalBackground()}
+      </View>
       <Text style={styles.questionTitle}>Choose Your Tour Type</Text>
       <View style={styles.optionsVertical}>
         <TouchableOpacity
@@ -1717,5 +1826,60 @@ const styles = StyleSheet.create({
   },
   landmarkTopicTextSelected: {
     color: Colors.light.background,
+  },
+  backgroundOrbital: {
+    position: "absolute" as const,
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -175 }, { translateY: -175 }],
+    opacity: 0.08,
+    zIndex: 0,
+  },
+  orbitalContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  passportCenter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute" as const,
+    zIndex: 10,
+  },
+  orbit: {
+    position: "absolute" as const,
+    borderWidth: 2,
+    borderColor: Colors.light.primary,
+    borderStyle: "solid" as const,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.primary,
+    position: "absolute" as const,
+  },
+  dotTop: {
+    top: -4,
+    left: "50%",
+    transform: [{ translateX: -4 }],
+  },
+  dotBottom: {
+    bottom: -4,
+    left: "50%",
+    transform: [{ translateX: -4 }],
+  },
+  dotLeft: {
+    left: -4,
+    top: "50%",
+    transform: [{ translateY: -4 }],
+  },
+  dotRight: {
+    right: -4,
+    top: "50%",
+    transform: [{ translateY: -4 }],
   },
 });
