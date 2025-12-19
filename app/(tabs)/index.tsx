@@ -1420,12 +1420,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.light.text,
     textAlign: "center",
-    marginBottom: 28,
+    marginBottom: 32,
     letterSpacing: -0.5,
-    position: "absolute" as const,
-    top: 40,
-    left: 0,
-    right: 0,
   },
   questionSubtitle: {
     fontSize: 14,
@@ -1437,7 +1433,6 @@ const styles = StyleSheet.create({
   optionsVertical: {
     width: "100%",
     gap: 16,
-    marginTop: 100,
   },
   fullOptionCard: {
     backgroundColor: Colors.light.card,
@@ -1470,7 +1465,7 @@ const styles = StyleSheet.create({
   },
   fullOptionTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "500",
     color: Colors.light.text,
     textAlign: "center",
     letterSpacing: -0.3,
