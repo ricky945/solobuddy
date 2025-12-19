@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: "space-between",
+    justifyContent: "center",
   },
   header: {
     flexDirection: "row",
@@ -518,6 +518,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     maxHeight: 280,
+    marginBottom: 20,
   },
   artworkPlaceholder: {
     width: "90%",
@@ -540,7 +541,7 @@ const styles = StyleSheet.create({
   },
   info: {
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 24,
   },
   title: {
     fontSize: 24,
@@ -556,6 +557,7 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     paddingVertical: 8,
+    marginTop: 20,
   },
   slider: {
     width: "100%",
@@ -662,6 +664,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingTop: 16,
+    marginTop: 20,
   },
   speedButton: {
     width: 56,
