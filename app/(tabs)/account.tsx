@@ -9,28 +9,27 @@ import {
   TextInput,
   Image,
   Alert,
+  Dimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
 import {
   User as UserIcon,
-  MapPin,
-  Globe,
   ChevronRight,
   Camera,
-  Edit3,
   LogOut,
   Bell,
   Lock,
-  CreditCard,
   HelpCircle,
-  Info,
-  Trash2,
+  Settings,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 import Colors from "@/constants/colors";
 import { useUser } from "@/contexts/UserContext";
+
+const { width } = Dimensions.get("window");
 
 const getCountryFlag = (country: string): string => {
   const countryToFlag: Record<string, string> = {
@@ -139,16 +138,7 @@ export default function AccountScreen() {
     );
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive" },
-      ]
-    );
-  };
+
 
   const handlePickImage = async () => {
     try {
@@ -311,18 +301,34 @@ export default function AccountScreen() {
     );
   }
 
+  const visitedCount = user.profile?.countriesVisited?.length || 0;
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView edges={["top"]} style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.pageTitle}>Account</Text>
-          <View style={styles.profileCard}>
-            <View style={styles.profileHeader}>
+      <LinearGradient
+        colors={["#1a1a2e", "#16213e", "#0f3460"]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]}>
+          <View style={styles.topBar}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              activeOpacity={0.8}
+            >
+              <ChevronRight size={24} color="#fff" style={{ transform: [{ rotate: "180deg" }] }} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.settingsButton}
+              activeOpacity={0.8}
+            >
+              <Settings size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.heroSection}>
+            <View style={styles.profilePictureContainer}>
+              <View style={styles.profilePictureGlow} />
               <View style={styles.profilePicture}>
                 {user.profile?.profilePictureUrl ? (
                   <Image
@@ -336,169 +342,164 @@ export default function AccountScreen() {
                   />
                 )}
               </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{user.profile?.name}</Text>
-                {user.profile?.currentCity && (
-                  <View style={styles.currentCityBadge}>
-                    <MapPin size={14} color="#16A34A" />
-                    <Text style={styles.currentCityLabel}>Currently in:</Text>
-                    <Text style={styles.currentCityText}>{user.profile.currentCity}</Text>
-                  </View>
-                )}
-              </View>
               <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => setIsEditingProfile(true)}
+                style={styles.cameraButtonNew}
                 activeOpacity={0.8}
+                onPress={handlePickImage}
               >
-                <Edit3 size={18} color={Colors.light.primary} />
+                <Camera size={16} color="#fff" />
               </TouchableOpacity>
             </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-            {user.profile?.bio && (
-              <Text style={styles.profileBio}>{user.profile.bio}</Text>
-            )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.statsCard}>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>0</Text>
+              <Text style={styles.statLabel}>Tours</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>0</Text>
+              <Text style={styles.statLabel}>Trips</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{visitedCount}</Text>
+              <Text style={styles.statLabel}>Visited</Text>
+            </View>
+          </View>
+        </View>
 
-            {user.profile?.countriesVisited && user.profile.countriesVisited.length > 0 && (
-              <View style={styles.citiesVisited}>
-                <View style={styles.citiesHeader}>
-                  <Globe size={18} color={Colors.light.text} />
-                  <Text style={styles.citiesTitle}>Countries I&apos;ve Been To</Text>
-                </View>
-                <View style={styles.citiesList}>
-                  {user.profile.countriesVisited.map((country: string, index: number) => (
-                    <View key={index} style={styles.cityBadge}>
-                      <Text style={styles.countryFlag}>{getCountryFlag(country)}</Text>
-                      <Text style={styles.cityBadgeText}>{country}</Text>
-                    </View>
-                  ))}
-                </View>
+        <View style={styles.profileInfoSection}>
+          <View style={styles.nameRow}>
+            <Text style={styles.profileName}>{user.profile?.name}</Text>
+            <TouchableOpacity
+              style={styles.editButtonNew}
+              onPress={() => setIsEditingProfile(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+              <ChevronRight size={16} color={Colors.light.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {user.profile?.currentCity && (
+            <View style={styles.locationRow}>
+              <Text style={styles.countryFlag}>{getCountryFlag(user.profile?.currentCity || "")}</Text>
+              <Text style={styles.locationText}>{user.profile.currentCity}</Text>
+            </View>
+          )}
+
+          {user.profile?.bio && (
+            <Text style={styles.bioText}>{user.profile.bio}</Text>
+          )}
+        </View>
+
+        {user.profile?.countriesVisited && user.profile.countriesVisited.length > 0 && (
+          <LinearGradient
+            colors={["#667eea", "#764ba2"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.travelCard}
+          >
+            <View style={styles.travelCardHeader}>
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>NEW</Text>
               </View>
-            )}
-          </View>
+              <Text style={styles.travelCardTitle}>Travel Journey</Text>
+              <Text style={styles.travelCardYear}>2025</Text>
+            </View>
+            <TouchableOpacity style={styles.unwrapButton} activeOpacity={0.9}>
+              <Text style={styles.unwrapButtonText}>View Countries</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        )}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account Management</Text>
-
-            <View style={styles.settingsCard}>
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
-                <View style={styles.settingIcon}>
-                  <CreditCard size={20} color={Colors.light.primary} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Subscription</Text>
-                  <Text style={styles.settingSubtitle}>
-                    Manage your subscription
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
-
-              <View style={styles.settingDivider} />
-
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
-                <View style={styles.settingIcon}>
-                  <Bell size={20} color={Colors.light.primary} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Notifications</Text>
-                  <Text style={styles.settingSubtitle}>
-                    Manage your notifications
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
-
-              <View style={styles.settingDivider} />
-
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
-                <View style={styles.settingIcon}>
-                  <Lock size={20} color={Colors.light.primary} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Privacy & Security</Text>
-                  <Text style={styles.settingSubtitle}>
-                    Control your data
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
+        {user.profile?.countriesVisited && user.profile.countriesVisited.length > 0 && (
+          <View style={styles.countriesSection}>
+            <View style={styles.countriesHeader}>
+              <Text style={styles.countriesSectionTitle}>Countries Visited</Text>
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Support</Text>
-
-            <View style={styles.settingsCard}>
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
-                <View style={styles.settingIcon}>
-                  <HelpCircle size={20} color={Colors.light.primary} />
+            <View style={styles.countriesGrid}>
+              {user.profile.countriesVisited.slice(0, 6).map((country: string, index: number) => (
+                <View key={index} style={styles.countryChip}>
+                  <Text style={styles.countryFlagSmall}>{getCountryFlag(country)}</Text>
+                  <Text style={styles.countryChipText} numberOfLines={1}>{country}</Text>
                 </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Help Center</Text>
-                  <Text style={styles.settingSubtitle}>
-                    Get help and support
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
-
-              <View style={styles.settingDivider} />
-
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
-                <View style={styles.settingIcon}>
-                  <Info size={20} color={Colors.light.primary} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>About</Text>
-                  <Text style={styles.settingSubtitle}>
-                    Version 1.0.0
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
+              ))}
             </View>
           </View>
+        )}
 
-          <View style={styles.section}>
-            <View style={styles.settingsCard}>
-              <TouchableOpacity
-                style={styles.settingItem}
-                activeOpacity={0.7}
-                onPress={handleLogout}
-              >
-                <View style={[styles.settingIcon, styles.settingIconDanger]}>
-                  <LogOut size={20} color={Colors.light.error} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingTitle, styles.settingTitleDanger]}>
-                    Logout
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
+        <View style={styles.settingsSection}>
+          <View style={styles.settingsCard}>
+            <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <View style={styles.settingIconNew}>
+                <Bell size={22} color={Colors.light.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Notifications</Text>
+              </View>
+              <ChevronRight size={20} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
 
-              <View style={styles.settingDivider} />
+            <View style={styles.settingDivider} />
 
-              <TouchableOpacity
-                style={styles.settingItem}
-                activeOpacity={0.7}
-                onPress={handleDeleteAccount}
-              >
-                <View style={[styles.settingIcon, styles.settingIconDanger]}>
-                  <Trash2 size={20} color={Colors.light.error} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingTitle, styles.settingTitleDanger]}>
-                    Delete Account
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.light.textSecondary} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <View style={styles.settingIconNew}>
+                <Lock size={22} color={Colors.light.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Privacy & Security</Text>
+              </View>
+              <ChevronRight size={20} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={styles.settingDivider} />
+
+            <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <View style={styles.settingIconNew}>
+                <HelpCircle size={22} color={Colors.light.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Help & Support</Text>
+              </View>
+              <ChevronRight size={20} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={styles.settingDivider} />
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              activeOpacity={0.7}
+              onPress={handleLogout}
+            >
+              <View style={styles.settingIconNew}>
+                <LogOut size={22} color={Colors.light.error} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingTitle, styles.settingTitleDanger]}>
+                  Logout
+                </Text>
+              </View>
+              <ChevronRight size={20} color={Colors.light.textSecondary} />
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </SafeAreaView>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -506,7 +507,293 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: "#f8f9fa",
+  },
+  headerGradient: {
+    paddingBottom: 60,
+  },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroSection: {
+    alignItems: "center",
+    paddingTop: 20,
+  },
+  profilePictureContainer: {
+    position: "relative",
+    marginBottom: 16,
+  },
+  profilePictureGlow: {
+    position: "absolute",
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 75,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#fff",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  profilePicture: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 4,
+    borderColor: "#fff",
+    overflow: "hidden",
+  },
+  profilePictureImage: {
+    width: "100%",
+    height: "100%",
+  },
+  cameraButtonNew: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.light.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
+  statsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: -30,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    fontWeight: "500" as const,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: Colors.light.border,
+  },
+  profileInfoSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  nameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  profileName: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  editButtonNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  editButtonText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.light.primary,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  locationText: {
+    fontSize: 16,
+    color: Colors.light.text,
+    fontWeight: "500" as const,
+  },
+  bioText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.light.text,
+  },
+  travelCard: {
+    marginHorizontal: 20,
+    marginTop: 24,
+    borderRadius: 20,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  travelCardHeader: {
+    marginBottom: 20,
+  },
+  newBadge: {
+    backgroundColor: "#1e3a8a",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+  newBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800" as const,
+    letterSpacing: 1,
+  },
+  travelCardTitle: {
+    fontSize: 32,
+    fontWeight: "800" as const,
+    color: "#fff",
+    marginBottom: 4,
+  },
+  travelCardYear: {
+    fontSize: 72,
+    fontWeight: "900" as const,
+    color: "rgba(255, 255, 255, 0.3)",
+    lineHeight: 72,
+    letterSpacing: -2,
+  },
+  unwrapButton: {
+    backgroundColor: "#fff",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+  unwrapButtonText: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: "#667eea",
+  },
+  countriesSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  countriesHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  countriesSectionTitle: {
+    fontSize: 22,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  seeAllText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.light.primary,
+  },
+  countriesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  countryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingLeft: 10,
+    paddingRight: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    maxWidth: (width - 60) / 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  countryFlagSmall: {
+    fontSize: 24,
+  },
+  countryChipText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.light.text,
+    flex: 1,
+  },
+  settingsSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
   safeArea: {
     flex: 1,
@@ -625,31 +912,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  profilePicture: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.light.backgroundSecondary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  profilePictureImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
+
   profileInfo: {
     flex: 1,
     gap: 8,
   },
-  profileName: {
-    fontSize: 22,
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-
   editButton: {
     width: 40,
     height: 40,
@@ -814,34 +1081,28 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
   settingsCard: {
-    backgroundColor: Colors.light.card,
+    backgroundColor: "#fff",
     borderRadius: 16,
     overflow: "hidden",
     ...Platform.select({
       ios: {
-        shadowColor: Colors.light.shadow,
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
+        shadowOpacity: 0.05,
         shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   settingItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: 18,
   },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.backgroundSecondary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
+  settingIconNew: {
+    marginRight: 16,
   },
   settingIconDanger: {
     backgroundColor: `${Colors.light.error}15`,
