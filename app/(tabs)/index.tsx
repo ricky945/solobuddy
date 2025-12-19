@@ -468,6 +468,21 @@ For ${location}, return topics as JSON array:`;
     const { width } = Dimensions.get('window');
     const size = Math.min(width * 1.2, 500);
 
+    const counterSpin1 = rotateAnim1.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '-360deg'],
+    });
+
+    const counterSpin2 = rotateAnim2.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '-360deg'],
+    });
+
+    const counterSpin3 = rotateAnim3.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '-360deg'],
+    });
+
     return (
       <View style={[styles.orbitalContainer, { width: size, height: size }]}>
         <Animated.View
@@ -482,12 +497,12 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={22} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={22} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
+          <Animated.View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: counterSpin1 }] }]}>
+            <Plane size={26} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: counterSpin1 }] }]}>
+            <Plane size={26} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
         </Animated.View>
 
         <Animated.View
@@ -502,15 +517,15 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={20} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
+          <Animated.View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: counterSpin2 }] }]}>
+            <Plane size={24} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: counterSpin2 }] }]}>
+            <Plane size={24} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: counterSpin2 }] }]}>
+            <Plane size={24} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
         </Animated.View>
 
         <Animated.View
@@ -525,18 +540,18 @@ For ${location}, return topics as JSON array:`;
             },
           ]}
         >
-          <View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
-          <View style={[styles.planeIcon, styles.dotLeft, { transform: [{ rotate: '90deg' }] }]}>
-            <Plane size={17} color={Colors.light.primary} fill={Colors.light.primary} />
-          </View>
+          <Animated.View style={[styles.planeIcon, styles.dotTop, { transform: [{ rotate: counterSpin3 }] }]}>
+            <Plane size={21} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotRight, { transform: [{ rotate: counterSpin3 }] }]}>
+            <Plane size={21} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotBottom, { transform: [{ rotate: counterSpin3 }] }]}>
+            <Plane size={21} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
+          <Animated.View style={[styles.planeIcon, styles.dotLeft, { transform: [{ rotate: counterSpin3 }] }]}>
+            <Plane size={21} color={Colors.light.primary} fill={Colors.light.primary} />
+          </Animated.View>
         </Animated.View>
       </View>
     );
@@ -1515,7 +1530,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
     width: "100%",
-    marginTop: 165,
+    marginTop: 60,
   },
   welcomeTitle: {
     fontSize: 32,
