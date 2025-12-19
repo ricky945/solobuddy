@@ -10,7 +10,18 @@ const ttsGenerateSchema = z.object({
 function sanitizeText(text: string): string {
   return text
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+    .replace(/[\u2000-\u206F\u2E00-\u2E7F]/g, '')
+    .replace(/[\uFFF0-\uFFFF]/g, '')
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+    .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+    .replace(/[\u{1F680}-\u{1F6FF}]/gu, '')
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')
     .replace(/[<>{}\[\]\\]/g, '')
+    .replace(/["''""]/g, "'")
+    .replace(/[—–]/g, '-')
+    .replace(/[…]/g, '...')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -20,6 +31,7 @@ export default publicProcedure
   .mutation(async ({ input }) => {
     const sanitizedText = sanitizeText(input.text);
     console.log("[Backend TTS] Generating audio, original length:", input.text.length, "sanitized:", sanitizedText.length);
+    console.log("[Backend TTS] First 100 chars:", sanitizedText.substring(0, 100));
     
     if (!sanitizedText || sanitizedText.length < 10) {
       throw new Error("Text too short or invalid after sanitization");
@@ -33,42 +45,71 @@ export default publicProcedure
         throw new Error("OpenAI API key not configured");
       }
 
+      console.log("[Backend TTS] API key length:", apiKey.length, "starts with:", apiKey.substring(0, 7));
+
+      const requestBody = {
+        model: "tts-1",
+        input: sanitizedText,
+        voice: input.voice,
+        speed: input.speed,
+      };
+
+      console.log("[Backend TTS] Request body:", { ...requestBody, input: `${sanitizedText.substring(0, 50)}...` });
+
       const ttsResponse = await fetch("https://api.openai.com/v1/audio/speech", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model: "tts-1",
-          input: sanitizedText,
-          voice: input.voice,
-          speed: input.speed,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log("[Backend TTS] OpenAI API response status:", ttsResponse.status);
 
       if (!ttsResponse.ok) {
         let errorText = "Unknown error";
+        let errorDetails: any = null;
+        
         try {
           const contentType = ttsResponse.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
-            const errorJson = await ttsResponse.json();
-            errorText = JSON.stringify(errorJson);
-            console.error("[Backend TTS] OpenAI API error response:", errorJson);
+            errorDetails = await ttsResponse.json();
+            errorText = JSON.stringify(errorDetails);
+            console.error("[Backend TTS] OpenAI API error response:", errorDetails);
           } else {
             errorText = await ttsResponse.text();
+            console.error("[Backend TTS] OpenAI API error text:", errorText);
           }
         } catch (parseError) {
           console.error("[Backend TTS] Error parsing API error:", parseError);
         }
         
-        if (ttsResponse.status === 403 || errorText.includes("Access Denied")) {
-          throw new Error("Access denied. The request may contain invalid characters or be too large. Please try with shorter text.");
+        if (ttsResponse.status === 401) {
+          console.error("[Backend TTS] 401 Unauthorized - Invalid API key");
+          throw new Error("Invalid API key. Please check your OpenAI API key configuration.");
         }
         
-        throw new Error(`TTS API error: ${ttsResponse.status} - ${errorText}`);
+        if (ttsResponse.status === 403) {
+          const errorMsg = errorDetails?.error?.message || errorText;
+          console.error("[Backend TTS] 403 Forbidden - Access denied:", errorMsg);
+          throw new Error("API access denied. Your OpenAI API key may not have TTS access enabled or may be invalid.");
+        }
+        
+        if (ttsResponse.status === 429) {
+          console.error("[Backend TTS] 429 Rate limit exceeded");
+          throw new Error("Rate limit exceeded. Please try again in a moment.");
+        }
+
+        if (ttsResponse.status === 400) {
+          const errorMsg = errorDetails?.error?.message || errorText;
+          console.error("[Backend TTS] 400 Bad Request:", errorMsg);
+          throw new Error(`Invalid request: ${errorMsg}`);
+        }
+        
+        const errorMsg = errorDetails?.error?.message || errorText;
+        console.error("[Backend TTS] HTTP", ttsResponse.status, "error:", errorMsg);
+        throw new Error(`TTS API error (${ttsResponse.status}): ${errorMsg}`);
       }
 
       const audioBuffer = await ttsResponse.arrayBuffer();
