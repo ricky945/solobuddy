@@ -246,7 +246,7 @@ export default function AddLandmarkModal({
           </View>
         ) : (
         <KeyboardAvoidingView 
-          style={[styles.modalContent, styles.modalContentTall, styles.formModal]}
+          style={[styles.modalContent, styles.modalContentTall]}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
@@ -394,6 +394,7 @@ const styles = StyleSheet.create({
   },
   modalContentTall: {
     maxHeight: "92%",
+    flex: 1,
   },
   header: {
     flexDirection: "row" as const,
@@ -538,6 +539,6 @@ const styles = StyleSheet.create({
     fontWeight: "600" as const,
   },
   formModal: {
-    paddingBottom: 40,
+    flex: 1,
   },
 });
