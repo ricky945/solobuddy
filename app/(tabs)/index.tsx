@@ -2045,7 +2045,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
-    opacity: 0.0975,
+    opacity: 0.1975,
     zIndex: 0,
   },
   orbitalContainer: {
