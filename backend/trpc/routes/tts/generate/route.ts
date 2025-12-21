@@ -9,6 +9,12 @@ const ttsGenerateSchema = z.object({
 
 function sanitizeText(text: string): string {
   return text
+    .replace(/https?:\/\/[^\s]+/gi, '')
+    .replace(/www\.[^\s]+/gi, '')
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
     .replace(/[\u2000-\u206F\u2E00-\u2E7F]/g, '')
     .replace(/[\uFFF0-\uFFFF]/g, '')
@@ -18,11 +24,12 @@ function sanitizeText(text: string): string {
     .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')
     .replace(/[\u{2600}-\u{26FF}]/gu, '')
     .replace(/[\u{2700}-\u{27BF}]/gu, '')
-    .replace(/[<>{}\[\]\\]/g, '')
+    .replace(/[<>{}\[\]\\|`$%&]/g, '')
     .replace(/["''""]/g, "'")
     .replace(/[—–]/g, '-')
     .replace(/[…]/g, '...')
     .replace(/\s+/g, ' ')
+    .replace(/[^a-zA-Z0-9\s.,!?;:()'"-]/g, '')
     .trim();
 }
 

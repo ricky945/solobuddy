@@ -2,14 +2,21 @@ export function sanitizeTextForTTS(text: string): string {
   if (!text) return '';
   
   let cleaned = text
+    .replace(/https?:\/\/[^\s]+/gi, '')
+    .replace(/www\.[^\s]+/gi, '')
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[\u{2600}-\u{27BF}]/gu, '')
-    .replace(/[<>{}[\]\\|`]/g, '')
+    .replace(/[<>{}[\]\\|`$%&]/g, '')
     .replace(/["''""]/g, "'")
     .replace(/[—–]/g, '-')
     .replace(/[…]/g, '...')
     .replace(/\s+/g, ' ')
+    .replace(/[^a-zA-Z0-9\s.,!?;:()'"-]/g, '')
     .trim();
   
   if (cleaned.length > 4000) {
