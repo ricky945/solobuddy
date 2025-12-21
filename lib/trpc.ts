@@ -9,7 +9,14 @@ export const trpc = createTRPCReact<AppRouter>();
 const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   
+  console.log("[tRPC] Environment check:", {
+    hasUrl: !!url,
+    url: url ? `${url.substring(0, 30)}...` : 'NOT SET',
+    allEnvs: Object.keys(process.env).filter(k => k.includes('RORK')),
+  });
+  
   if (!url) {
+    console.error("[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL is not set!");
     throw new Error(
       "EXPO_PUBLIC_RORK_API_BASE_URL is not set. Please contact support."
     );
@@ -194,8 +201,10 @@ export const trpcClient = trpc.createClient({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
-        console.log("[tRPC] Making request to:", url);
         const urlString = typeof url === 'string' ? url : url.toString();
+        console.log("[tRPC] Making request to:", urlString);
+        console.log("[tRPC] Request method:", options?.method || 'GET');
+        console.log("[tRPC] Request headers:", options?.headers);
         
         try {
           const response = await fetchWithRetry(urlString, options);
@@ -235,7 +244,9 @@ export const trpcClient = trpc.createClient({
             if (response.status === 403) {
               throw new Error('Access denied. The request may contain invalid characters or be too large. Please try with shorter text.');
             } else if (response.status === 404) {
-              throw new Error('Backend endpoint not found. Please check your connection.');
+              console.error('[tRPC] 404 Error - Full URL:', urlString);
+              console.error('[tRPC] Backend may not be deployed or endpoint is incorrect');
+              throw new Error('Backend endpoint not found. The backend may not be deployed yet. Please wait a moment and try again.');
             } else if (response.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.');
             } else if (response.status === 502 || response.status === 503) {

@@ -87,7 +87,12 @@ export default function ExploreScreen() {
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
-  const generateTTSMutation = trpc.tts.generate.useMutation();
+  const generateTTSMutation = trpc.tts.generate.useMutation({
+    onError: (error) => {
+      console.error('[Tour Generation] TTS mutation error:', error);
+      console.error('[Tour Generation] Error message:', error.message);
+    },
+  });
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim1 = useRef(new Animated.Value(0)).current;
@@ -981,13 +986,23 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           
           console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
           
-          const ttsResult = await generateTTSMutation.mutateAsync({
-            text: chunks[i],
-            voice: "alloy",
-            speed: 1.0,
-          });
+          let ttsResult;
+          try {
+            console.log(`[Tour Generation] Calling TTS API for chunk ${i + 1}...`);
+            ttsResult = await generateTTSMutation.mutateAsync({
+              text: chunks[i],
+              voice: "alloy",
+              speed: 1.0,
+            });
+            console.log(`[Tour Generation] TTS API response received for chunk ${i + 1}`);
+          } catch (ttsError: any) {
+            console.error(`[Tour Generation] TTS API call failed for chunk ${i + 1}:`, ttsError);
+            console.error('[Tour Generation] TTS Error details:', ttsError.message);
+            throw new Error(`Backend connection failed: ${ttsError.message || 'Unknown error'}`);
+          }
 
-          if (!ttsResult.success || !ttsResult.audioData) {
+          if (!ttsResult || !ttsResult.success || !ttsResult.audioData) {
+            console.error(`[Tour Generation] Invalid TTS result for chunk ${i + 1}:`, ttsResult);
             throw new Error(`Failed to generate audio for chunk ${i + 1}`);
           }
 
@@ -1017,9 +1032,22 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         
         if (!isMounted) return;
         
+        let errorMessage = "Unable to generate audio.";
+        if (ttsError?.message) {
+          if (ttsError.message.includes('Backend endpoint not found') || ttsError.message.includes('404')) {
+            errorMessage = "Backend service is temporarily unavailable. This is usually a deployment issue that resolves automatically. Please try again in 1-2 minutes.";
+          } else if (ttsError.message.includes('network') || ttsError.message.includes('connection')) {
+            errorMessage = "Network connection error. Please check your internet connection and try again.";
+          } else if (ttsError.message.includes('timeout')) {
+            errorMessage = "Request timed out. Please try with a shorter tour duration.";
+          } else {
+            errorMessage = ttsError.message;
+          }
+        }
+        
         Alert.alert(
           "Audio Generation Failed",
-          "Unable to generate audio. Please check your connection and try again.",
+          errorMessage,
           [{ text: "OK", onPress: resetFlow }]
         );
         resetFlow();
