@@ -66,7 +66,6 @@ app.use(
   trpcServer({
     router: appRouter,
     createContext,
-    endpoint: "/trpc",
     onError({ error, path }) {
       console.error(`[tRPC] Error on ${path}:`, error);
       console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
