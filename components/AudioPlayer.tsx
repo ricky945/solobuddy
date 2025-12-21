@@ -210,8 +210,9 @@ export default function AudioPlayer({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldDuckAndroid: true,
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
+        playThroughEarpieceAndroid: false,
+        interruptionModeIOS: 2,
+        interruptionModeAndroid: 2,
       });
       console.log("[AudioPlayer] Audio mode configured");
     } catch (error) {
@@ -498,13 +499,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: "center",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     alignItems: "center",
     paddingVertical: 12,
+    width: "100%",
+    alignSelf: "stretch",
   },
   closeButton: {
     padding: 4,
@@ -519,6 +523,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     maxHeight: 280,
     marginBottom: 20,
+    alignSelf: "center",
   },
   artworkPlaceholder: {
     width: "90%",
@@ -541,7 +546,9 @@ const styles = StyleSheet.create({
   },
   info: {
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 24,
+    width: "100%",
   },
   title: {
     fontSize: 24,
@@ -558,6 +565,7 @@ const styles = StyleSheet.create({
   progressContainer: {
     paddingVertical: 8,
     marginTop: 20,
+    width: "100%",
   },
   slider: {
     width: "100%",
@@ -665,6 +673,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 16,
     marginTop: 20,
+    width: "100%",
   },
   speedButton: {
     width: 56,
@@ -729,6 +738,7 @@ const styles = StyleSheet.create({
   mainControls: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 24,
   },
   controlButton: {
@@ -752,6 +762,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,

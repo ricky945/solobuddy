@@ -374,10 +374,13 @@ const styles = StyleSheet.create({
     height: 160,
     position: "relative",
     backgroundColor: "#F2F2F7",
+    alignItems: "center",
+    justifyContent: "center",
   },
   thumbnail: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
   typeBadge: {
     position: "absolute",
@@ -415,6 +418,7 @@ const styles = StyleSheet.create({
   },
   cardDetails: {
     padding: 16,
+    alignItems: "stretch",
   },
   cardHeader: {
     flexDirection: "row",
@@ -438,6 +442,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   locationRow: {
     flexDirection: "row",
@@ -500,5 +505,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
 });

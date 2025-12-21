@@ -1644,7 +1644,7 @@ const styles = StyleSheet.create({
   centeredContainer: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "center",
     width: "100%",
     gap: 20,
     paddingTop: 8,
@@ -1741,9 +1741,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     borderWidth: 1.5,
     borderColor: Colors.light.border,
+    width: "100%",
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.shadow,
@@ -1780,10 +1782,12 @@ const styles = StyleSheet.create({
   inputWrapper: {
     width: "100%",
     gap: 12,
+    alignItems: "stretch",
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
     backgroundColor: Colors.light.card,
     paddingHorizontal: 16,
@@ -1791,6 +1795,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: Colors.light.border,
+    width: "100%",
   },
   input: {
     flex: 1,
@@ -1863,6 +1868,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     justifyContent: "center",
+    alignItems: "center",
     width: "100%",
   },
   topicChip: {
@@ -1894,9 +1900,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 16,
     borderWidth: 2,
     borderColor: Colors.light.border,
+    width: "100%",
   },
   simpleOptionCardSelected: {
     borderColor: Colors.light.primary,
@@ -1929,6 +1937,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     width: "100%",
     gap: 12,
+    justifyContent: "center",
+    alignItems: "stretch",
   },
   lengthCard: {
     flex: 1,

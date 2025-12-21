@@ -111,9 +111,48 @@ export const [ToursProvider, useTours] = createContextHook(() => {
     console.log("[ToursContext] Current tours count:", currentTours.length);
     
     if (!tour.thumbnailUrl && tour.location) {
-      const locationQuery = encodeURIComponent(tour.location);
-      tour.thumbnailUrl = `https://source.unsplash.com/800x600/?${locationQuery},landmark,city`;
-      console.log("[ToursContext] Auto-generated thumbnail URL:", tour.thumbnailUrl);
+      try {
+        console.log("[ToursContext] Generating thumbnail for:", tour.location);
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() || "";
+        
+        if (apiKey) {
+          const response = await fetch(
+            "https://places.googleapis.com/v1/places:searchText",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": apiKey,
+                "X-Goog-FieldMask": "places.photos",
+              },
+              body: JSON.stringify({
+                textQuery: tour.location,
+                maxResultCount: 1,
+              }),
+            }
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.places?.[0]?.photos?.[0]?.name) {
+              const photoName = data.places[0].photos[0].name;
+              tour.thumbnailUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${apiKey}&maxHeightPx=600&maxWidthPx=800`;
+              console.log("[ToursContext] Google Places thumbnail generated:", tour.thumbnailUrl);
+            }
+          }
+        }
+        
+        if (!tour.thumbnailUrl) {
+          const locationQuery = encodeURIComponent(tour.location);
+          tour.thumbnailUrl = `https://source.unsplash.com/800x600/?${locationQuery},landmark,city`;
+          console.log("[ToursContext] Unsplash thumbnail fallback:", tour.thumbnailUrl);
+        }
+      } catch (error) {
+        console.error("[ToursContext] Error generating thumbnail:", error);
+        const locationQuery = encodeURIComponent(tour.location);
+        tour.thumbnailUrl = `https://source.unsplash.com/800x600/?${locationQuery},landmark,city`;
+        console.log("[ToursContext] Unsplash thumbnail fallback (error):", tour.thumbnailUrl);
+      }
     }
     
     const updatedTours = [tour, ...currentTours];
