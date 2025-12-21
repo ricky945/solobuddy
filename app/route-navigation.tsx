@@ -8,6 +8,7 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -86,6 +87,8 @@ export default function RouteNavigationScreen() {
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
+          interruptionModeIOS: 1,
+          interruptionModeAndroid: 1,
         });
       } catch (error) {
         console.error("[RouteNav] Audio setup error:", error);
@@ -257,7 +260,7 @@ export default function RouteNavigationScreen() {
     router.back();
   };
 
-  const openInMaps = () => {
+  const openInMaps = async () => {
     if (!tour || !tour.landmarks) return;
     
     const landmark = tour.landmarks[currentLandmarkIndex];
@@ -269,8 +272,20 @@ export default function RouteNavigationScreen() {
       default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
     });
     
-    if (Platform.OS === "web") {
-      window.open(url, "_blank");
+    try {
+      if (Platform.OS === "web") {
+        window.open(url, "_blank");
+      } else {
+        const supported = await Linking.canOpenURL(url as string);
+        if (supported) {
+          await Linking.openURL(url as string);
+        } else {
+          Alert.alert("Error", "Unable to open maps application");
+        }
+      }
+    } catch (error) {
+      console.error("[RouteNav] Error opening maps:", error);
+      Alert.alert("Error", "Failed to open maps application");
     }
   };
 

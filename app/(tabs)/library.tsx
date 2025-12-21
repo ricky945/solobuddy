@@ -333,7 +333,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 32,
-    alignItems: "center",
   },
   emptyState: {
     alignItems: "center",
