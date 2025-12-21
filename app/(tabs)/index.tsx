@@ -971,10 +971,15 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         const chunks = splitTextIntoChunks(audioScript);
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
         
-        const audioBlobs: (Blob | string)[] = [];
+        const audioBlobs: string[] = [];
         
         for (let i = 0; i < chunks.length; i++) {
-          console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
+          if (!isMounted) {
+            console.log("[Tour Generation] Component unmounted, stopping");
+            return;
+          }
+          
+          console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
           
           const ttsResult = await generateTTSMutation.mutateAsync({
             text: chunks[i],
@@ -982,80 +987,43 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             speed: 1.0,
           });
 
-          console.log(`[Tour Generation] TTS response for chunk ${i + 1}: success=${ttsResult.success}`);
-
           if (!ttsResult.success || !ttsResult.audioData) {
             throw new Error(`Failed to generate audio for chunk ${i + 1}`);
           }
 
           audioBlobs.push(ttsResult.audioData);
+          console.log(`[Tour Generation] Chunk ${i + 1} completed`);
         }
         
-        console.log("[Tour Generation] Merging", audioBlobs.length, "audio chunks");
+        console.log("[Tour Generation] All chunks generated, creating audio file...");
         
-        console.log("[Tour Generation] Creating audio URL...");
+        const combinedBase64 = audioBlobs.join('');
         
-        if (audioBlobs.length === 1 && typeof audioBlobs[0] === 'string') {
-          const base64Audio = audioBlobs[0];
-          
-          if (Platform.OS === 'web') {
-            audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
-            console.log("[Tour Generation] Web data URL created (single chunk)");
-          } else {
-            const file = new File(Paths.cache, `tour_${tourId}.mp3`);
-            console.log("[Tour Generation] Saving to file:", file.uri);
-            
-            const bytes = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0));
-            file.create({ overwrite: true });
-            file.write(bytes);
-            
-            audioUrl = file.uri;
-            console.log("[Tour Generation] Native file saved:", file.uri);
-          }
-        } else if (audioBlobs.length > 1) {
-          const combinedBase64 = (audioBlobs as string[]).join('');
-          
-          if (Platform.OS === 'web') {
-            audioUrl = `data:audio/mpeg;base64,${combinedBase64}`;
-            console.log("[Tour Generation] Web data URL created (multiple chunks merged)");
-          } else {
-            const file = new File(Paths.cache, `tour_${tourId}.mp3`);
-            console.log("[Tour Generation] Saving to file:", file.uri);
-            
-            const bytes = Uint8Array.from(atob(combinedBase64), c => c.charCodeAt(0));
-            file.create({ overwrite: true });
-            file.write(bytes);
-            
-            audioUrl = file.uri;
-            console.log("[Tour Generation] Native file saved:", file.uri);
-          }
+        if (Platform.OS === 'web') {
+          audioUrl = `data:audio/mpeg;base64,${combinedBase64}`;
+          console.log("[Tour Generation] Web audio URL created");
+        } else {
+          const file = new File(Paths.cache, `tour_${tourId}.mp3`);
+          const bytes = Uint8Array.from(atob(combinedBase64), c => c.charCodeAt(0));
+          file.create({ overwrite: true });
+          file.write(bytes);
+          audioUrl = file.uri;
+          console.log("[Tour Generation] Native audio file saved:", file.uri);
         }
         
-        console.log("[Tour Generation] TTS audio generated successfully");
+        console.log("[Tour Generation] Audio generation complete");
       } catch (ttsError: any) {
-        console.error("[Tour Generation] TTS generation failed:", ttsError);
-        console.error("[Tour Generation] Error details:", ttsError?.message);
+        console.error("[Tour Generation] TTS failed:", ttsError?.message || ttsError);
         
-        if (!isMounted) {
-          console.log("[Tour Generation] Component unmounted during TTS error");
-          return;
-        }
-        
-        const errorMsg = ttsError?.message || "Unknown TTS error";
+        if (!isMounted) return;
         
         Alert.alert(
           "Audio Generation Failed",
-          `Unable to generate audio narration: ${errorMsg}. The tour will be saved without audio. You can try generating it again later.`,
-          [
-            { text: "Cancel", style: "cancel", onPress: () => { resetFlow(); } },
-            { text: "Save Without Audio", onPress: () => { audioUrl = ''; } }
-          ]
+          "Unable to generate audio. Please check your connection and try again.",
+          [{ text: "OK", onPress: resetFlow }]
         );
-        
-        if (!audioUrl) {
-          resetFlow();
-          return;
-        }
+        resetFlow();
+        return;
       }
 
       if (!isMounted) {

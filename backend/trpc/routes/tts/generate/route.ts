@@ -38,11 +38,12 @@ export default publicProcedure
     }
 
     try {
-      const apiKey = (process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
+      const apiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
       
       if (!apiKey || apiKey === "undefined" || apiKey === "") {
         console.error("[Backend TTS] OpenAI API key not configured");
-        throw new Error("OpenAI API key not configured");
+        console.error("[Backend TTS] Available env keys:", Object.keys(process.env).filter(k => k.includes('OPENAI')));
+        throw new Error("OpenAI API key not configured. Please check environment variables.");
       }
 
       console.log("[Backend TTS] API key length:", apiKey.length, "starts with:", apiKey.substring(0, 7));
