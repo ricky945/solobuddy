@@ -215,11 +215,26 @@ export const trpcClient = trpc.createClient({
           
           if (!response.ok) {
             let errorMessage = `HTTP ${response.status}`;
+            let isTRPCError = false;
             
             try {
               if (isJson) {
                 const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || errorMessage;
+                console.log('[tRPC] Error response data:', errorData);
+                
+                if (errorData.error?.message) {
+                  errorMessage = errorData.error.message;
+                  isTRPCError = true;
+                } else if (errorData.message) {
+                  errorMessage = errorData.message;
+                  isTRPCError = true;
+                } else if (errorData.error?.data?.message) {
+                  errorMessage = errorData.error.data.message;
+                  isTRPCError = true;
+                } else if (errorData.error) {
+                  errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
+                  isTRPCError = true;
+                }
               } else {
                 const textResponse = await response.text();
                 
@@ -235,24 +250,31 @@ export const trpcClient = trpc.createClient({
                   }
                 } else {
                   errorMessage = textResponse.length > 200 ? textResponse.substring(0, 200) + '...' : textResponse;
+                  isTRPCError = textResponse.trim().length > 0;
                 }
               }
             } catch (parseError) {
               console.error('[tRPC] Error parsing response:', parseError);
             }
             
-            if (response.status === 403) {
-              throw new Error('Access denied. The request may contain invalid characters or be too large. Please try with shorter text.');
-            } else if (response.status === 404) {
+            if (response.status === 404) {
               console.error('[tRPC] 404 Error - Full URL:', urlString);
               console.error('[tRPC] Backend may not be deployed or endpoint is incorrect');
-              throw new Error('Backend endpoint not found. The backend may not be deployed yet. Please wait a moment and try again.');
+              if (!isTRPCError) {
+                errorMessage = 'Backend endpoint not found. The backend may not be deployed yet. Please wait a moment and try again.';
+              }
             } else if (response.status === 429) {
-              throw new Error('Too many requests. Please wait a moment and try again.');
+              if (!isTRPCError) {
+                errorMessage = 'Too many requests. Please wait a moment and try again.';
+              }
             } else if (response.status === 502 || response.status === 503) {
-              throw new Error('Service temporarily unavailable. Please try again in a moment.');
+              if (!isTRPCError) {
+                errorMessage = 'Service temporarily unavailable. Please try again in a moment.';
+              }
             } else if (response.status >= 500) {
-              throw new Error('Server error. Please try again in a few moments.');
+              if (!isTRPCError) {
+                errorMessage = 'Server error. Please try again in a few moments.';
+              }
             }
             
             throw new Error(errorMessage);
