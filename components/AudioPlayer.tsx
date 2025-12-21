@@ -228,6 +228,12 @@ export default function AudioPlayer({
 
   const updateNowPlaying = async (sound: Audio.Sound) => {
     try {
+      const status = await sound.getStatusAsync();
+      if (!status.isLoaded) {
+        console.log("[AudioPlayer] Sound not loaded, skipping now playing update");
+        return;
+      }
+      
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         await sound.setStatusAsync({
           progressUpdateIntervalMillis: 500,
