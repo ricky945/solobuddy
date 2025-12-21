@@ -77,7 +77,6 @@ export default function ExploreScreen() {
   const [audioLength, setAudioLength] = useState<AudioLength>(20);
   const [transportMethod, setTransportMethod] = useState<TransportMethod>("walking");
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
-  const [generationProgress, setGenerationProgress] = useState<string>("");
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [selectedLandmarkTopics, setSelectedLandmarkTopics] = useState<string[]>([]);
   const [placeSuggestions, setPlaceSuggestions] = useState<{ name: string; placeId: string; types: string[] }[]>([]);
@@ -176,7 +175,6 @@ export default function ExploreScreen() {
     setSelectedTopics([]);
     setAudioLength(20);
     setTransportMethod("walking");
-    setGenerationProgress("");
     fadeAnim.setValue(0);
   };
 
@@ -683,7 +681,6 @@ For ${location}, return topics as JSON array:`;
     }
 
     goToNextStep("generating");
-    setGenerationProgress("Preparing your audio tour...");
     console.log("[Tour Generation] Starting...");
 
     let isMounted = true;
@@ -878,7 +875,6 @@ Return JSON with:
 - script: Full detailed spoken script for a ${audioLength}-minute audio tour (~${audioLength * 150} words). Write it as if you're the narrator speaking directly to the listener. Include an engaging introduction, detailed information about each topic, interesting stories and facts, and a memorable conclusion. Make it flow naturally as spoken narration.
 ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real landmarks near ${location} with {name, description, coordinates: {latitude, longitude}, timestamp}. These should be actual places reachable via ${transportMethod}.\n- famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}\n- hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
 
-      setGenerationProgress("Creating tour content...");
       console.log("[Tour Generation] Calling AI...");
 
       const response = await generateText({
@@ -916,7 +912,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         return match;
       }).replace(/\s+/g, ' ').trim();
 
-      setGenerationProgress("Generating audio narration...");
       console.log("[Tour Generation] Generating audio from script...");
       console.log("[Tour Generation] Script length:", audioScript.length, "characters");
       console.log("[Tour Generation] Script preview:", audioScript.substring(0, 200) + "...");
@@ -970,7 +965,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         const audioBlobs: (Blob | string)[] = [];
         
         for (let i = 0; i < chunks.length; i++) {
-          setGenerationProgress(`Generating audio (${i + 1}/${chunks.length})...`);
           console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
           
           const ttsResult = await generateTTSMutation.mutateAsync({
@@ -988,7 +982,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           audioBlobs.push(ttsResult.audioData);
         }
         
-        setGenerationProgress("Merging audio files...");
         console.log("[Tour Generation] Merging", audioBlobs.length, "audio chunks");
         
         console.log("[Tour Generation] Creating audio URL...");
@@ -1051,7 +1044,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         );
         
         if (!audioUrl) {
-          setGenerationProgress("");
           resetFlow();
           return;
         }
@@ -1108,7 +1100,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         createdAt: Date.now(),
       };
 
-      setGenerationProgress("Finalizing your tour...");
       console.log("[Tour Generation] Adding tour to library");
       console.log("[Tour Generation] Tour object:", JSON.stringify({
         id: audioGuide.id,
@@ -1157,10 +1148,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         [{ text: "OK" }]
       );
       resetFlow();
-    } finally {
-      if (isMounted) {
-        setGenerationProgress("");
-      }
     }
   };
 
@@ -1503,7 +1490,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Loading All Available Information</Text>
-      <Text style={styles.generatingText}>Please wait...</Text>
+      <Text style={styles.generatingText}>Please do not close the app</Text>
     </Animated.View>
   );
 
@@ -1558,9 +1545,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
-      {generationProgress && (
-        <Text style={styles.generatingProgress}>{generationProgress}</Text>
-      )}
       <Text style={styles.generatingText}>Please do not close the app</Text>
     </Animated.View>
   );
