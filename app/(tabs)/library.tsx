@@ -266,6 +266,8 @@ const styles = StyleSheet.create({
   swipeableContainer: {
     position: "relative",
     marginBottom: 20,
+    width: "100%",
+    alignSelf: "center",
   },
   deleteButtonContainer: {
     position: "absolute",
@@ -331,6 +333,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 32,
+    alignItems: "center",
   },
   emptyState: {
     alignItems: "center",
@@ -354,6 +357,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     overflow: "hidden",
+    width: "100%",
+    alignSelf: "center",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -368,6 +373,8 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     overflow: "hidden",
+    width: "100%",
+    alignItems: "stretch",
   },
   imageContainer: {
     width: "100%",
@@ -376,11 +383,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   thumbnail: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
+    alignSelf: "center",
   },
   typeBadge: {
     position: "absolute",
@@ -419,6 +428,7 @@ const styles = StyleSheet.create({
   cardDetails: {
     padding: 16,
     alignItems: "stretch",
+    width: "100%",
   },
   cardHeader: {
     flexDirection: "row",

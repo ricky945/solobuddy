@@ -501,6 +501,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: "space-between",
     alignItems: "center",
+    width: "100%",
+    alignSelf: "center",
   },
   header: {
     flexDirection: "row",
@@ -524,19 +526,22 @@ const styles = StyleSheet.create({
     maxHeight: 280,
     marginBottom: 20,
     alignSelf: "center",
+    paddingHorizontal: 0,
   },
   artworkPlaceholder: {
     width: "90%",
     height: "90%",
+    aspectRatio: 1,
     backgroundColor: Colors.light.backgroundSecondary,
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.shadow,
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 1,
+        shadowOpacity: 0.1,
         shadowRadius: 16,
       },
       android: {
@@ -566,6 +571,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 20,
     width: "100%",
+    alignSelf: "center",
   },
   slider: {
     width: "100%",
@@ -588,6 +594,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginVertical: 12,
+    width: "100%",
+    alignSelf: "center",
   },
   chapterInfo: {
     flex: 1,
@@ -674,6 +682,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginTop: 20,
     width: "100%",
+    alignSelf: "center",
   },
   speedButton: {
     width: 56,
@@ -740,6 +749,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 24,
+    alignSelf: "center",
   },
   controlButton: {
     position: "relative",
