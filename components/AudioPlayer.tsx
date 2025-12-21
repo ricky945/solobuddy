@@ -133,7 +133,6 @@ export default function AudioPlayer({
           { 
             shouldPlay: false, 
             progressUpdateIntervalMillis: 500,
-            ...(Platform.OS === 'android' && { androidImplementation: 'SimpleExoPlayer' })
           },
           onPlaybackStatusUpdate
         );
@@ -214,16 +213,16 @@ export default function AudioPlayer({
 
   const configureAudioMode = async () => {
     try {
-      console.log("[AudioPlayer] Configuring audio mode for background playback...");
+      console.log("[AudioPlayer] Configuring audio mode for background and lock screen playback...");
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        shouldDuckAndroid: true,
+        shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
-        interruptionModeIOS: 2,
-        interruptionModeAndroid: 2,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
       });
-      console.log("[AudioPlayer] Audio mode configured successfully for lock screen playback");
+      console.log("[AudioPlayer] Audio mode configured - will play on locked screen with controls");
       return true;
     } catch (error) {
       console.error("[AudioPlayer] CRITICAL: Failed to configure audio mode:", error);

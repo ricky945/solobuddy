@@ -83,15 +83,22 @@ export default function RouteNavigationScreen() {
   useEffect(() => {
     const setupAudio = async () => {
       try {
+        console.log("[RouteNav] Configuring audio for background and lock screen playback...");
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
-          shouldDuckAndroid: true,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
           interruptionModeIOS: 1,
           interruptionModeAndroid: 1,
         });
+        console.log("[RouteNav] Audio configured - will continue playing on locked screen");
       } catch (error) {
         console.error("[RouteNav] Audio setup error:", error);
+        Alert.alert(
+          "Audio Setup Error",
+          "Background audio may not work properly. Please restart the app."
+        );
       }
     };
     setupAudio();
@@ -208,6 +215,16 @@ export default function RouteNavigationScreen() {
 
 
 
+      console.log("[RouteNav] Creating audio with lock screen support...");
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
+      });
+      
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: tour.audioUrl },
         {
@@ -215,6 +232,8 @@ export default function RouteNavigationScreen() {
           positionMillis: landmark.audioTimestamp * 1000,
         }
       );
+      
+      console.log("[RouteNav] Audio created - will play on locked screen");
 
       setSound(newSound);
       setIsPlaying(true);
