@@ -71,15 +71,15 @@ export default function ExploreScreen() {
   const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
-  const discoverQuery = trpc.landmarks.discover.useQuery(
+  const touristicDiscoverQuery = trpc.landmarks.discover.useQuery(
     {
       latitude: location?.coords.latitude || 0,
       longitude: location?.coords.longitude || 0,
       radius: 5000,
-      type: activeTab,
+      type: "touristic",
     },
     {
-      enabled: !!location,
+      enabled: !!location && activeTab === "touristic",
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
       staleTime: 5 * 60 * 1000,
@@ -88,11 +88,32 @@ export default function ExploreScreen() {
     }
   );
 
+  const uniqueLandmarksQuery = trpc.landmarks.getAll.useQuery(
+    {
+      latitude: location?.coords.latitude,
+      longitude: location?.coords.longitude,
+      radius: 25,
+    },
+    {
+      enabled: !!location && activeTab === "unique",
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      staleTime: 30 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  const activeQuery = activeTab === "touristic" ? touristicDiscoverQuery : uniqueLandmarksQuery;
+
   useEffect(() => {
-    if (discoverQuery.data?.landmarks && location) {
-      console.log("[Explore] Loaded", discoverQuery.data.landmarks.length, "landmarks");
-      
-      const landmarksWithDistance = (discoverQuery.data.landmarks as MapLandmark[]).map((landmark) => ({
+    if (!location) return;
+
+    if (activeTab === "touristic") {
+      const raw = (touristicDiscoverQuery.data?.landmarks as MapLandmark[] | undefined) ?? [];
+      console.log("[Explore] Loaded", raw.length, "touristic landmarks");
+
+      const landmarksWithDistance = raw.map((landmark) => ({
         ...landmark,
         distance: calculateDistance(
           location.coords.latitude,
@@ -101,17 +122,35 @@ export default function ExploreScreen() {
           landmark.coordinates.longitude
         ),
       }));
-      
+
       const sorted = landmarksWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
       setLandmarks(sorted);
+      return;
     }
-  }, [discoverQuery.data, location]);
+
+    const rawAll = (uniqueLandmarksQuery.data?.landmarks as MapLandmark[] | undefined) ?? [];
+    const uniqueOnly = rawAll.filter((l) => l.type === "unique");
+    console.log("[Explore] Loaded", uniqueOnly.length, "unique landmarks from global DB");
+
+    const landmarksWithDistance = uniqueOnly.map((landmark) => ({
+      ...landmark,
+      distance: calculateDistance(
+        location.coords.latitude,
+        location.coords.longitude,
+        landmark.coordinates.latitude,
+        landmark.coordinates.longitude
+      ),
+    }));
+
+    const sorted = landmarksWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    setLandmarks(sorted);
+  }, [activeTab, location, touristicDiscoverQuery.data, uniqueLandmarksQuery.data]);
 
   useEffect(() => {
-    if (discoverQuery.isError) {
-      console.error("[Explore] Error:", discoverQuery.error);
+    if (activeQuery.isError) {
+      console.error("[Explore] Error:", activeQuery.error);
     }
-  }, [discoverQuery.isError, discoverQuery.error]);
+  }, [activeQuery.isError, activeQuery.error]);
 
   useEffect(() => {
     getLocation();
@@ -219,7 +258,10 @@ export default function ExploreScreen() {
   };
 
   const handleAddLandmark = (landmark: MapLandmark) => {
-    setLandmarks([...landmarks, landmark]);
+    setLandmarks((prev) => {
+      const next = [landmark, ...prev];
+      return next;
+    });
   };
 
   const getMarkerColor = (type: string) => {
@@ -323,19 +365,19 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
-      {discoverQuery.isLoading && (
+      {activeQuery.isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color={Colors.light.primary} />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       )}
 
-      {discoverQuery.isError && (
+      {activeQuery.isError && (
         <View style={styles.errorOverlay}>
           <Text style={styles.errorText}>
-            {discoverQuery.error?.message || "Failed to load"}
+            {activeQuery.error?.message || "Failed to load"}
           </Text>
-          <TouchableOpacity onPress={() => discoverQuery.refetch()} style={styles.retryButton}>
+          <TouchableOpacity onPress={() => activeQuery.refetch()} style={styles.retryButton}>
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -368,14 +410,25 @@ export default function ExploreScreen() {
         </View>
 
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {landmarks.length === 0 && !discoverQuery.isLoading ? (
-            <Text style={styles.emptyText}>No landmarks found</Text>
-          ) : (
+          {landmarks.length === 0 && !activeQuery.isLoading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>
+                {activeTab === "unique" ? "It’s empty" : "No landmarks found"}
+              </Text>
+              {activeTab === "unique" ? (
+                <Text style={styles.emptySubtitle}>
+                  No user-submitted hidden gems nearby yet. Be the first to add one.
+                </Text>
+              ) : null}
+            </View>
+          ) : activeTab === "touristic" ? (
             landmarks.map((landmark) => (
               <TouchableOpacity
                 key={landmark.id}
                 style={styles.card}
                 onPress={() => handleMarkerPress(landmark)}
+                activeOpacity={0.85}
+                testID={`touristic-landmark-card-${landmark.id}`}
               >
                 <View style={styles.cardIcon}>
                   <MapPin size={20} color={Colors.light.primary} />
@@ -385,9 +438,7 @@ export default function ExploreScreen() {
                     <Text style={styles.cardName} numberOfLines={1}>
                       {landmark.name}
                     </Text>
-                    <Text style={styles.cardDistance}>
-                      {formatDistance(landmark.distance || 0)}
-                    </Text>
+                    <Text style={styles.cardDistance}>{formatDistance(landmark.distance || 0)}</Text>
                   </View>
                   <Text style={styles.cardDesc} numberOfLines={2}>
                     {landmark.description}
@@ -395,16 +446,78 @@ export default function ExploreScreen() {
                 </View>
               </TouchableOpacity>
             ))
+          ) : (
+            landmarks.map((landmark) => {
+              const thumbnailUrl =
+                landmark.userImages?.[0] ||
+                landmark.imageUrl ||
+                `https://source.unsplash.com/300x300/?hidden%20gem,${encodeURIComponent(landmark.name)}`;
+
+              const avgRating =
+                landmark.reviews.length > 0
+                  ? landmark.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / landmark.reviews.length
+                  : 0;
+
+              const ratingText =
+                landmark.reviews.length > 0
+                  ? `${avgRating.toFixed(1)} • ${landmark.reviews.length} review${
+                      landmark.reviews.length === 1 ? "" : "s"
+                    }`
+                  : "No reviews yet";
+
+              return (
+                <TouchableOpacity
+                  key={landmark.id}
+                  style={styles.gemCard}
+                  onPress={() => handleMarkerPress(landmark)}
+                  activeOpacity={0.9}
+                  testID={`unique-landmark-card-${landmark.id}`}
+                >
+                  <View style={styles.gemThumbWrap}>
+                    <Image source={{ uri: thumbnailUrl }} style={styles.gemThumb} />
+                  </View>
+
+                  <View style={styles.gemBody}>
+                    <View style={styles.gemTopRow}>
+                      <Text style={styles.gemTitle} numberOfLines={1}>
+                        {landmark.name}
+                      </Text>
+                      <Text style={styles.gemDistance}>{formatDistance(landmark.distance || 0)}</Text>
+                    </View>
+
+                    <Text style={styles.gemMeta} numberOfLines={1}>
+                      Suggested by {landmark.createdByName || "Anonymous"}
+                    </Text>
+
+                    <Text style={styles.gemRating}>{ratingText}</Text>
+
+                    {landmark.reviews?.[0]?.comment ? (
+                      <Text style={styles.gemSnippet} numberOfLines={2}>
+                        “{landmark.reviews[0].comment}”
+                      </Text>
+                    ) : (
+                      <Text style={styles.gemSnippetMuted} numberOfLines={2}>
+                        Tap to view details and reviews.
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       </Animated.View>
 
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => setIsAddModalVisible(true)}
-      >
-        <Plus size={24} color="#fff" />
-      </TouchableOpacity>
+      {activeTab === "unique" ? (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setIsAddModalVisible(true)}
+          activeOpacity={0.9}
+          testID="add-hidden-gem-button"
+        >
+          <Plus size={24} color="#fff" />
+        </TouchableOpacity>
+      ) : null}
 
       <LandmarkDetailModal
         landmark={selectedLandmark}
@@ -427,7 +540,10 @@ export default function ExploreScreen() {
         <AddLandmarkModal
           visible={isAddModalVisible}
           onClose={() => setIsAddModalVisible(false)}
-          onAdd={handleAddLandmark}
+          onAdd={(landmark: MapLandmark) => {
+            handleAddLandmark(landmark);
+            uniqueLandmarksQuery.refetch();
+          }}
           coordinates={{
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -800,6 +916,97 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: Colors.light.textSecondary,
     marginTop: 20,
+  },
+  emptyContainer: {
+    paddingTop: 18,
+    paddingHorizontal: 8,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "500" as const,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  gemCard: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  gemThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: Colors.light.backgroundSecondary,
+  },
+  gemThumb: {
+    width: 64,
+    height: 64,
+  },
+  gemBody: {
+    flex: 1,
+  },
+  gemTopRow: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  gemTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
+    letterSpacing: -0.2,
+  },
+  gemDistance: {
+    fontSize: 12,
+    fontWeight: "800" as const,
+    color: "#10B981",
+  },
+  gemMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+  },
+  gemRating: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
+  },
+  gemSnippet: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "500" as const,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
+  },
+  gemSnippetMuted: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
   },
   card: {
     flexDirection: "row" as const,
