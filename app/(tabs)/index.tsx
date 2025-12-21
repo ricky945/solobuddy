@@ -41,6 +41,7 @@ import { File, Paths } from "expo-file-system";
 import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
+import { trpc } from "@/lib/trpc";
 import {
   TOPICS,
   AUDIO_LENGTHS,
@@ -70,6 +71,7 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { addTour } = useTours();
   const { incrementToursCreated, canCreateTour, upgradeTier } = useUser();
+  const ttsGenerateMutation = trpc.tts.generate.useMutation();
   const [flowStep, setFlowStep] = useState<FlowStep>("welcome");
   const [tourType, setTourType] = useState<"route" | "immersive" | "landmark" | null>(null);
   const [location, setLocation] = useState<string>("");
@@ -927,127 +929,30 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
       let audioUrl: string = '';
       
-      const generateAudioChunk = async (text: string, retryCount = 0): Promise<string> => {
-        const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY?.trim();
-        
-        if (!apiKey) {
-          console.error('[TTS] OpenAI API key not configured');
-          throw new Error('Audio generation is not configured. Please contact support.');
-        }
-        
-        const maxRetries = 3;
-        const baseDelay = 2000;
-        
+      const generateAudioChunk = async (text: string): Promise<string> => {
         try {
-          console.log(`[TTS] Generating audio chunk (attempt ${retryCount + 1}/${maxRetries + 1})`);
+          console.log(`[TTS] Generating audio chunk via tRPC, text length: ${text.length}`);
           
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 60000);
-          
-          const response = await fetch('https://api.openai.com/v1/audio/speech', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: 'tts-1',
-              input: text,
-              voice: 'alloy',
-              speed: 1.0,
-            }),
-            signal: controller.signal,
+          const result = await ttsGenerateMutation.mutateAsync({
+            text,
+            voice: 'alloy',
+            speed: 1.0,
           });
           
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            let errorText = 'Unknown error';
-            try {
-              const contentType = response.headers.get('content-type');
-              if (contentType?.includes('application/json')) {
-                const errorJson = await response.json();
-                errorText = errorJson.error?.message || JSON.stringify(errorJson);
-              } else {
-                errorText = await response.text();
-              }
-            } catch (e) {
-              console.error('[TTS] Error parsing error response:', e);
-            }
-            
-            console.error(`[TTS] API error (${response.status}):`, errorText);
-            
-            if (response.status === 429 && retryCount < maxRetries) {
-              const delay = baseDelay * Math.pow(2, retryCount);
-              console.log(`[TTS] Rate limited, retrying in ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              return generateAudioChunk(text, retryCount + 1);
-            }
-            
-            if (response.status === 401) {
-              throw new Error('Invalid API key. Please contact support.');
-            }
-            
-            if (response.status === 403) {
-              throw new Error('API access denied. Please contact support.');
-            }
-            
-            if (response.status >= 500 && retryCount < maxRetries) {
-              const delay = baseDelay * Math.pow(2, retryCount);
-              console.log(`[TTS] Server error, retrying in ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              return generateAudioChunk(text, retryCount + 1);
-            }
-            
-            throw new Error(`Audio generation failed (${response.status}). Please try again.`);
+          if (!result.success || !result.audioData) {
+            throw new Error('Failed to generate audio');
           }
           
-          const audioBuffer = await response.arrayBuffer();
-          
-          if (audioBuffer.byteLength === 0) {
-            throw new Error('Empty audio response');
-          }
-          
-          console.log(`[TTS] Chunk generated successfully: ${audioBuffer.byteLength} bytes`);
-          
-          const uint8Array = new Uint8Array(audioBuffer);
-          let binary = '';
-          for (let i = 0; i < uint8Array.length; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
-          }
-          return btoa(binary);
+          console.log(`[TTS] Chunk generated successfully via tRPC`);
+          return result.audioData;
         } catch (error: any) {
-          console.error(`[TTS] Error generating chunk:`, error);
+          console.error(`[TTS] Error generating chunk via tRPC:`, error);
           
-          if (error.name === 'AbortError') {
-            console.error('[TTS] Request timed out');
-            if (retryCount < maxRetries) {
-              const delay = baseDelay * Math.pow(2, retryCount);
-              console.log(`[TTS] Timeout, retrying in ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              return generateAudioChunk(text, retryCount + 1);
-            }
-            throw new Error('Audio generation timed out. Please check your connection.');
+          if (error.message) {
+            throw new Error(error.message);
           }
           
-          const isNetworkError = 
-            error.message?.toLowerCase().includes('network') ||
-            error.message?.toLowerCase().includes('fetch') ||
-            error.message?.toLowerCase().includes('failed to fetch') ||
-            error.name === 'TypeError' && error.message?.toLowerCase().includes('failed');
-          
-          if (isNetworkError && retryCount < maxRetries) {
-            const delay = baseDelay * Math.pow(2, retryCount);
-            console.log(`[TTS] Network error, retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return generateAudioChunk(text, retryCount + 1);
-          }
-          
-          if (error.message.includes('API key') || error.message.includes('API access')) {
-            throw error;
-          }
-          
-          throw new Error('Network error. Please check your internet connection and try again.');
+          throw new Error('Failed to generate audio. Please check your connection and try again.');
         }
       };
       
