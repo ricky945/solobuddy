@@ -8,6 +8,7 @@ import ttsGenerateRoute from "./routes/tts/generate/route";
 import getAllLandmarksRoute from "./routes/landmarks/get-all/route";
 import upvoteLandmarkRoute from "./routes/landmarks/upvote/route";
 import addReviewRoute from "./routes/landmarks/add-review/route";
+import deleteLandmarkRoute from "./routes/landmarks/delete/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
     getAll: getAllLandmarksRoute,
     upvote: upvoteLandmarkRoute,
     addReview: addReviewRoute,
+    delete: deleteLandmarkRoute,
   }),
   tts: createTRPCRouter({
     generate: ttsGenerateRoute,

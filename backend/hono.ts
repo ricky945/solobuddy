@@ -39,7 +39,8 @@ app.get("/health", (c) => {
         "landmarks.getLocationName",
         "landmarks.getAll",
         "landmarks.upvote",
-        "landmarks.addReview"
+        "landmarks.addReview",
+        "landmarks.delete"
       ]
     }
   });

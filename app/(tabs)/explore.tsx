@@ -534,6 +534,18 @@ export default function ExploreScreen() {
           setIsModalVisible(false);
           setSelectedLandmark(null);
         }}
+        onLandmarkUpdated={(updated) => {
+          console.log("[Explore] Landmark updated in modal", updated.id);
+          setSelectedLandmark(updated);
+          setLandmarks((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)));
+        }}
+        onLandmarkDeleted={(landmarkId) => {
+          console.log("[Explore] Landmark deleted in modal", landmarkId);
+          setSelectedLandmark(null);
+          setIsModalVisible(false);
+          setLandmarks((prev) => prev.filter((l) => l.id !== landmarkId));
+          uniqueLandmarksQuery.refetch();
+        }}
       />
 
       {location && (
