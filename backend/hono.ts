@@ -45,7 +45,7 @@ app.get("/health", (c) => {
   });
 });
 
-app.use("/trpc/*", async (c, next) => {
+app.use("/api/trpc/*", async (c, next) => {
   const startTime = Date.now();
   const path = new URL(c.req.url).pathname;
   console.log(`[Hono] ${c.req.method} ${path}`);
@@ -61,11 +61,11 @@ app.use("/trpc/*", async (c, next) => {
 });
 
 app.use(
-  "/trpc/*",
+  "/api/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,
-    endpoint: "/trpc",
+    endpoint: "/api/trpc",
     onError({ error, path }) {
       console.error(`[tRPC] Error on ${path}:`, error);
       console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
