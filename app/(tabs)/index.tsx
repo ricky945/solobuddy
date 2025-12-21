@@ -49,9 +49,8 @@ import {
 import { Topic, AudioLength, TransportMethod, AudioGuide, SubscriptionTier } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
-import { trpc } from "@/lib/trpc";
 import PaywallModal from "@/components/PaywallModal";
-import { sanitizeTextForTTS } from "@/lib/text-sanitizer";
+import { splitIntoChunks } from "@/lib/text-sanitizer";
 
 const iconMap = {
   BookOpen,
@@ -88,12 +87,7 @@ export default function ExploreScreen() {
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
-  const generateTTSMutation = trpc.tts.generate.useMutation({
-    onError: (error) => {
-      console.error('[Tour Generation] TTS mutation error:', error);
-      console.error('[Tour Generation] Error message:', error.message);
-    },
-  });
+  const [ttsProgress, setTtsProgress] = useState<{ current: number; total: number } | null>(null);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim1 = useRef(new Animated.Value(0)).current;
@@ -933,86 +927,91 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
       let audioUrl: string = '';
       
-      const splitTextIntoChunks = (text: string, maxChars: number = 2500): string[] => {
-        const sanitized = sanitizeTextForTTS(text);
-        const chunks: string[] = [];
-        const sentences = sanitized.match(/[^.!?]+[.!?]+/g) || [sanitized];
+      const generateAudioChunk = async (text: string, retryCount = 0): Promise<string> => {
+        const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY?.trim();
         
-        let currentChunk = '';
+        if (!apiKey) {
+          throw new Error('OpenAI API key not configured');
+        }
         
-        for (const sentence of sentences) {
-          if ((currentChunk + sentence).length <= maxChars) {
-            currentChunk += sentence;
-          } else {
-            if (currentChunk) {
-              chunks.push(currentChunk.trim());
+        try {
+          const response = await fetch('https://api.openai.com/v1/audio/speech', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'tts-1',
+              input: text,
+              voice: 'alloy',
+              speed: 1.0,
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[TTS] API error (${response.status}):`, errorText);
+            
+            if (response.status === 429 && retryCount < 2) {
+              const delay = (retryCount + 1) * 3000;
+              console.log(`[TTS] Rate limited, retrying in ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return generateAudioChunk(text, retryCount + 1);
             }
-            if (sentence.length > maxChars) {
-              const words = sentence.split(' ');
-              let wordChunk = '';
-              for (const word of words) {
-                if ((wordChunk + ' ' + word).length <= maxChars) {
-                  wordChunk += (wordChunk ? ' ' : '') + word;
-                } else {
-                  if (wordChunk) chunks.push(wordChunk.trim());
-                  wordChunk = word;
-                }
-              }
-              if (wordChunk) currentChunk = wordChunk;
-            } else {
-              currentChunk = sentence;
-            }
+            
+            throw new Error(`TTS API error: ${response.status}`);
           }
+          
+          const audioBuffer = await response.arrayBuffer();
+          const uint8Array = new Uint8Array(audioBuffer);
+          let binary = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
+          }
+          return btoa(binary);
+        } catch (error: any) {
+          if (retryCount < 2 && (error.message.includes('network') || error.message.includes('fetch'))) {
+            const delay = (retryCount + 1) * 2000;
+            console.log(`[TTS] Network error, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return generateAudioChunk(text, retryCount + 1);
+          }
+          throw error;
         }
-        
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-        }
-        
-        return chunks.filter(chunk => chunk.length >= 10);
       };
       
       try {
         console.log("[Tour Generation] Generating TTS audio...");
         
-        const chunks = splitTextIntoChunks(audioScript);
+        const chunks = splitIntoChunks(audioScript, 2800);
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
+        
+        setTtsProgress({ current: 0, total: chunks.length });
         
         const audioBlobs: string[] = [];
         
         for (let i = 0; i < chunks.length; i++) {
           if (!isMounted) {
             console.log("[Tour Generation] Component unmounted, stopping");
+            setTtsProgress(null);
             return;
           }
           
-          console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length}, length: ${chunks[i].length} chars`);
+          console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}`);
+          setTtsProgress({ current: i + 1, total: chunks.length });
           
-          let ttsResult;
           try {
-            console.log(`[Tour Generation] Calling TTS API for chunk ${i + 1}...`);
-            const sanitizedChunk = sanitizeTextForTTS(chunks[i]);
-            console.log(`[Tour Generation] Chunk sanitized, length: ${sanitizedChunk.length}`);
-            ttsResult = await generateTTSMutation.mutateAsync({
-              text: sanitizedChunk,
-              voice: "alloy",
-              speed: 1.0,
-            });
-            console.log(`[Tour Generation] TTS API response received for chunk ${i + 1}`);
-          } catch (ttsError: any) {
-            console.error(`[Tour Generation] TTS API call failed for chunk ${i + 1}:`, ttsError);
-            console.error('[Tour Generation] TTS Error details:', ttsError.message);
-            throw new Error(`Backend connection failed: ${ttsError.message || 'Unknown error'}`);
+            const audioData = await generateAudioChunk(chunks[i]);
+            audioBlobs.push(audioData);
+            console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length} completed`);
+          } catch (chunkError: any) {
+            console.error(`[Tour Generation] Chunk ${i + 1} failed:`, chunkError.message);
+            throw new Error(`Audio generation failed at chunk ${i + 1}: ${chunkError.message}`);
           }
-
-          if (!ttsResult || !ttsResult.success || !ttsResult.audioData) {
-            console.error(`[Tour Generation] Invalid TTS result for chunk ${i + 1}:`, ttsResult);
-            throw new Error(`Failed to generate audio for chunk ${i + 1}`);
-          }
-
-          audioBlobs.push(ttsResult.audioData);
-          console.log(`[Tour Generation] Chunk ${i + 1} completed`);
         }
+        
+        setTtsProgress(null);
         
         console.log("[Tour Generation] All chunks generated, creating audio file...");
         
@@ -1034,17 +1033,19 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       } catch (ttsError: any) {
         console.error("[Tour Generation] TTS failed:", ttsError?.message || ttsError);
         
+        setTtsProgress(null);
+        
         if (!isMounted) return;
         
-        let errorMessage = "Unable to generate audio.";
+        let errorMessage = "Unable to generate audio. Please try again.";
         if (ttsError?.message) {
-          if (ttsError.message.includes('Backend endpoint not found') || ttsError.message.includes('404')) {
-            errorMessage = "Backend service is temporarily unavailable. This is usually a deployment issue that resolves automatically. Please try again in 1-2 minutes.";
-          } else if (ttsError.message.includes('network') || ttsError.message.includes('connection')) {
-            errorMessage = "Network connection error. Please check your internet connection and try again.";
-          } else if (ttsError.message.includes('timeout')) {
-            errorMessage = "Request timed out. Please try with a shorter tour duration.";
-          } else {
+          if (ttsError.message.includes('API key')) {
+            errorMessage = "API configuration error. Please contact support.";
+          } else if (ttsError.message.includes('Rate limit') || ttsError.message.includes('429')) {
+            errorMessage = "Too many requests. Please wait a moment and try again.";
+          } else if (ttsError.message.includes('network') || ttsError.message.includes('fetch')) {
+            errorMessage = "Network error. Please check your connection and try again.";
+          } else if (ttsError.message.includes('chunk')) {
             errorMessage = ttsError.message;
           }
         }
@@ -1554,7 +1555,14 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
-      <Text style={styles.generatingText}>Please do not close the app</Text>
+      {ttsProgress ? (
+        <Text style={styles.generatingProgress}>
+          Generating audio: {ttsProgress.current} of {ttsProgress.total}
+        </Text>
+      ) : (
+        <Text style={styles.generatingText}>Preparing content...</Text>
+      )}
+      <Text style={styles.generatingHint}>Please do not close the app</Text>
     </Animated.View>
   );
 
