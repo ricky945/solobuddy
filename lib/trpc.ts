@@ -154,7 +154,9 @@ async function fetchWithRetry(
 ): Promise<Response> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const isTTSRequest = url.includes('/tts/generate') || url.includes('/tours/generate');
+    const timeoutDuration = isTTSRequest ? 180000 : 60000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
     
     const response = await fetch(url, {
       ...options,
