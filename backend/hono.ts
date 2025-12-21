@@ -45,7 +45,7 @@ app.get("/health", (c) => {
   });
 });
 
-app.use("/trpc/*", async (c, next) => {
+app.use("/api/trpc/*", async (c, next) => {
   const startTime = Date.now();
   const path = new URL(c.req.url).pathname;
   console.log(`[Hono] ${c.req.method} ${path}`);
@@ -61,7 +61,7 @@ app.use("/trpc/*", async (c, next) => {
 });
 
 app.use(
-  "/trpc/*",
+  "/api/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,
