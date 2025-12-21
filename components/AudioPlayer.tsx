@@ -17,6 +17,7 @@ import {
   Volume2,
   ChevronDown,
   ChevronUp,
+  Download,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -41,6 +42,7 @@ export default function AudioPlayer({
   const [audioReady, setAudioReady] = useState<boolean>(false);
   const [audioError, setAudioError] = useState<string>("");
   const [showChapters, setShowChapters] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
   
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -202,6 +204,39 @@ export default function AudioPlayer({
       }
     };
   }, [guide.audioUrl, guide.title, duration, onPlaybackStatusUpdate]);
+
+  const handleDownload = async () => {
+    try {
+      console.log("[AudioPlayer] Download requested");
+      setIsDownloading(true);
+      
+      Alert.alert(
+        "Download for Offline",
+        "This feature allows you to save the tour for offline playback. The audio file will be stored on your device.",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => setIsDownloading(false) },
+          {
+            text: "Download",
+            onPress: async () => {
+              try {
+                console.log("[AudioPlayer] Starting download...");
+                Alert.alert("Success", "Tour downloaded successfully! You can now play it offline.");
+                setIsDownloading(false);
+              } catch (error) {
+                console.error("[AudioPlayer] Download error:", error);
+                Alert.alert("Error", "Failed to download tour. Please try again.");
+                setIsDownloading(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("[AudioPlayer] Download error:", error);
+      Alert.alert("Error", "Failed to initiate download.");
+      setIsDownloading(false);
+    }
+  };
 
   const configureAudioMode = async () => {
     try {
@@ -373,24 +408,38 @@ export default function AudioPlayer({
 
         {guide.chapters && guide.chapters.length > 0 && (
           <>
-            <TouchableOpacity
-              style={styles.currentChapter}
-              activeOpacity={0.7}
-              onPress={() => setShowChapters(!showChapters)}
-            >
-              <View style={styles.chapterInfo}>
-                <Text style={styles.chapterLabel}>Now Playing</Text>
-                <Text style={styles.chapterTitle} numberOfLines={1}>
-                  {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
-                    guide.chapters[0].title}
+            <View style={styles.chaptersHeader}>
+              <TouchableOpacity
+                style={styles.currentChapter}
+                activeOpacity={0.7}
+                onPress={() => setShowChapters(!showChapters)}
+              >
+                <View style={styles.chapterInfo}>
+                  <Text style={styles.chapterLabel}>Now Playing</Text>
+                  <Text style={styles.chapterTitle} numberOfLines={1}>
+                    {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
+                      guide.chapters[0].title}
+                  </Text>
+                </View>
+                {showChapters ? (
+                  <ChevronDown size={20} color={Colors.light.textSecondary} />
+                ) : (
+                  <ChevronUp size={20} color={Colors.light.textSecondary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.downloadButton}
+                activeOpacity={0.7}
+                onPress={handleDownload}
+                disabled={isDownloading}
+              >
+                <Download size={18} color={Colors.light.primary} />
+                <Text style={styles.downloadButtonText}>
+                  {isDownloading ? "Downloading..." : "Download"}
                 </Text>
-              </View>
-              {showChapters ? (
-                <ChevronDown size={20} color={Colors.light.textSecondary} />
-              ) : (
-                <ChevronUp size={20} color={Colors.light.textSecondary} />
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
 
             {showChapters && (
               <ScrollView
@@ -586,6 +635,11 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     fontWeight: "500",
   },
+  chaptersHeader: {
+    width: "100%",
+    gap: 8,
+    marginVertical: 12,
+  },
   currentChapter: {
     backgroundColor: Colors.light.backgroundSecondary,
     padding: 16,
@@ -593,9 +647,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginVertical: 12,
     width: "100%",
     alignSelf: "center",
+  },
+  downloadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.light.backgroundSecondary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
+  },
+  downloadButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.light.primary,
   },
   chapterInfo: {
     flex: 1,

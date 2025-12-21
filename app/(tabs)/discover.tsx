@@ -600,15 +600,17 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 60,
+    paddingTop: 20,
+    paddingBottom: 60,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   centeredContainer: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 24,
+    paddingTop: 40,
     position: "relative" as const,
   },
 
@@ -619,7 +621,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 16,
     zIndex: 1,
   },
   title: {
@@ -628,6 +630,7 @@ const styles = StyleSheet.create({
     color: "#000000",
     textAlign: "center",
     letterSpacing: -0.8,
+    marginBottom: 8,
     zIndex: 1,
   },
   subtitle: {
@@ -637,12 +640,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     lineHeight: 24,
     fontWeight: "400",
+    marginBottom: 8,
     zIndex: 1,
   },
   buttonContainer: {
     width: "100%",
     gap: 12,
-    marginTop: 24,
+    marginTop: 16,
     paddingHorizontal: 8,
     zIndex: 1,
   },

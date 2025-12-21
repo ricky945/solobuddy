@@ -30,32 +30,58 @@ interface SwipeableCardProps {
 
 function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
+  const [isSwipedOpen, setIsSwipedOpen] = useState(false);
+
+  const resetSwipe = () => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 8,
+    }).start(() => {
+      setIsSwipedOpen(false);
+    });
+  };
 
   const panResponder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         return Math.abs(gestureState.dx) > 5;
       },
+      onPanResponderTerminationRequest: () => true,
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dx < 0) {
-          translateX.setValue(gestureState.dx);
+          translateX.setValue(Math.max(gestureState.dx, -80));
+        } else if (isSwipedOpen && gestureState.dx > 0) {
+          translateX.setValue(Math.min(-80 + gestureState.dx, 0));
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -100) {
-          Animated.spring(translateX, {
-            toValue: -80,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }).start();
+        if (isSwipedOpen) {
+          if (gestureState.dx > 40) {
+            resetSwipe();
+          } else {
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              tension: 100,
+              friction: 8,
+            }).start();
+          }
         } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }).start();
+          if (gestureState.dx < -100) {
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              tension: 100,
+              friction: 8,
+            }).start(() => {
+              setIsSwipedOpen(true);
+            });
+          } else {
+            resetSwipe();
+          }
         }
       },
     })
@@ -105,7 +131,13 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.95}
-          onPress={onPress}
+          onPress={() => {
+            if (isSwipedOpen) {
+              resetSwipe();
+            } else {
+              onPress();
+            }
+          }}
         >
           <View style={styles.cardContent}>
             <View style={styles.imageContainer}>
