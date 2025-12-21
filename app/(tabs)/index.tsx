@@ -88,8 +88,6 @@ export default function ExploreScreen() {
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
-  const [ttsProgress, setTtsProgress] = useState<{ current: number; total: number } | null>(null);
-  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim1 = useRef(new Animated.Value(0)).current;
   const rotateAnim2 = useRef(new Animated.Value(0)).current;
@@ -956,19 +954,15 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         const chunks = splitIntoChunks(audioScript, 2800);
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
         
-        setTtsProgress({ current: 0, total: chunks.length });
-        
         const audioBlobs: string[] = [];
         
         for (let i = 0; i < chunks.length; i++) {
           if (!isMounted) {
             console.log("[Tour Generation] Component unmounted, stopping");
-            setTtsProgress(null);
             return;
           }
           
           console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}`);
-          setTtsProgress({ current: i + 1, total: chunks.length });
           
           try {
             const audioData = await generateAudioChunk(chunks[i]);
@@ -979,8 +973,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             throw new Error(`Audio generation failed at chunk ${i + 1}: ${chunkError.message}`);
           }
         }
-        
-        setTtsProgress(null);
         
         console.log("[Tour Generation] All chunks generated, creating audio file...");
         
@@ -1001,8 +993,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         console.log("[Tour Generation] Audio generation complete");
       } catch (ttsError: any) {
         console.error("[Tour Generation] TTS failed:", ttsError?.message || ttsError);
-        
-        setTtsProgress(null);
         
         if (!isMounted) return;
         
@@ -1524,13 +1514,6 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
-      {ttsProgress ? (
-        <Text style={styles.generatingProgress}>
-          Generating audio: {ttsProgress.current} of {ttsProgress.total}
-        </Text>
-      ) : (
-        <Text style={styles.generatingText}>Preparing content...</Text>
-      )}
       <Text style={styles.generatingHint}>Please do not close the app</Text>
     </Animated.View>
   );
