@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
   Platform,
-  Alert,
   ActivityIndicator,
   Text,
   TouchableOpacity,
@@ -61,6 +60,7 @@ export default function ExploreScreen() {
   const { user } = useUser();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(true);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [landmarks, setLandmarks] = useState<(MapLandmark & { distance?: number })[]>([]);
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
@@ -152,54 +152,101 @@ export default function ExploreScreen() {
     }
   }, [activeQuery.isError, activeQuery.error]);
 
-  useEffect(() => {
-    getLocation();
-  }, []);
-
-  const getLocation = async () => {
+  const getLocation = useCallback(async () => {
     console.log("[Explore] Getting location...");
-    
+    setIsLoadingLocation(true);
+    setLocationError(null);
+
     try {
       if (Platform.OS === "web") {
-        navigator.geolocation?.getCurrentPosition(
+        if (!navigator.geolocation?.getCurrentPosition) {
+          console.error("[Explore] Web geolocation API is not available");
+          setLocationError("Location is not supported in this browser.");
+          setIsLoadingLocation(false);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
           (position) => {
+            console.log("[Explore] Web location success", position.coords.latitude, position.coords.longitude);
             setLocation({
               coords: {
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
-                altitude: null,
-                accuracy: null,
-                altitudeAccuracy: null,
-                heading: null,
-                speed: null,
+                altitude: position.coords.altitude ?? null,
+                accuracy: position.coords.accuracy ?? null,
+                altitudeAccuracy: (position.coords as unknown as { altitudeAccuracy?: number | null }).altitudeAccuracy ?? null,
+                heading: position.coords.heading ?? null,
+                speed: position.coords.speed ?? null,
               },
               timestamp: Date.now(),
             });
             setIsLoadingLocation(false);
           },
           (error) => {
-            console.error("[Explore] Location error:", error);
+            console.error("[Explore] Web location error:", error);
+            setLocationError(
+              "Couldn’t get your location. Please allow location access in your browser settings and try again."
+            );
             setIsLoadingLocation(false);
-          }
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
-      } else {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        
-        if (status !== "granted") {
-          Alert.alert("Permission Required", "Location access is needed");
-          setIsLoadingLocation(false);
-          return;
-        }
+        return;
+      }
 
-        const loc = await Location.getCurrentPositionAsync({});
+      const hasServicesEnabled = await Location.hasServicesEnabledAsync();
+      console.log("[Explore] Location services enabled:", hasServicesEnabled);
+      if (!hasServicesEnabled) {
+        setLocationError("Location Services are turned off. Please enable them and try again.");
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      const perm = await Location.requestForegroundPermissionsAsync();
+      console.log("[Explore] Foreground location permission:", perm.status);
+
+      if (perm.status !== "granted") {
+        setLocationError("Location permission was denied. Please enable it in Settings and try again.");
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      try {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          mayShowUserSettingsDialog: true,
+        });
+        console.log("[Explore] Native location success", loc.coords.latitude, loc.coords.longitude);
         setLocation(loc);
         setIsLoadingLocation(false);
+        return;
+      } catch (err) {
+        console.error("[Explore] getCurrentPositionAsync failed, trying last known position", err);
       }
+
+      const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 2000 });
+      if (lastKnown) {
+        console.log("[Explore] Using last known position", lastKnown.coords.latitude, lastKnown.coords.longitude);
+        setLocation(lastKnown);
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      setLocationError(
+        "Couldn’t get your location. Please check Location Services, network, and try again."
+      );
+      setIsLoadingLocation(false);
     } catch (error) {
       console.error("[Explore] Error:", error);
+      setLocationError("Couldn’t get your location. Please try again.");
       setIsLoadingLocation(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    getLocation();
+  }, [getLocation]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -302,10 +349,29 @@ export default function ExploreScreen() {
     }
   };
 
-  if (isLoadingLocation || !location) {
+  if (isLoadingLocation) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={Colors.light.primary} style={{ marginTop: 100 }} />
+      <View style={styles.centerStateContainer} testID="explore-location-loading">
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+        <Text style={styles.centerStateTitle}>Finding your location…</Text>
+        <Text style={styles.centerStateSubtitle}>We use it to show nearby places.</Text>
+      </View>
+    );
+  }
+
+  if (!location) {
+    return (
+      <View style={styles.centerStateContainer} testID="explore-location-error">
+        <Text style={styles.centerStateTitle}>We can’t access your location</Text>
+        <Text style={styles.centerStateSubtitle}>{locationError ?? "Please try again."}</Text>
+        <TouchableOpacity
+          onPress={getLocation}
+          activeOpacity={0.85}
+          style={styles.centerStateButton}
+          testID="explore-location-retry"
+        >
+          <Text style={styles.centerStateButtonText}>Try Again</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -639,6 +705,43 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centerStateContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  centerStateTitle: {
+    marginTop: 10,
+    fontSize: 18,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
+    textAlign: "center",
+    letterSpacing: -0.2,
+  },
+  centerStateSubtitle: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  centerStateButton: {
+    marginTop: 10,
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    minWidth: 160,
+    alignItems: "center",
+  },
+  centerStateButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700" as const,
   },
   map: {
     flex: 1,
