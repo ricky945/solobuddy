@@ -338,6 +338,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContainer: {
+    height: height * 0.92,
     maxHeight: height * 0.92,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
