@@ -26,7 +26,7 @@ export default publicProcedure
     const typeMap = {
       touristic: ["tourist_attraction", "museum", "church", "park"],
       restaurant: ["restaurant", "cafe", "bar"],
-      unique: ["art_gallery", "museum", "park", "landmark"],
+      unique: ["art_gallery", "museum", "park", "historical_landmark"],
     };
 
     try {
