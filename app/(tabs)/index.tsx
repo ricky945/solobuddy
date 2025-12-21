@@ -51,6 +51,7 @@ import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import { trpc } from "@/lib/trpc";
 import PaywallModal from "@/components/PaywallModal";
+import { sanitizeTextForTTS } from "@/lib/text-sanitizer";
 
 const iconMap = {
   BookOpen,
@@ -932,9 +933,10 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
       let audioUrl: string = '';
       
-      const splitTextIntoChunks = (text: string, maxChars: number = 2900): string[] => {
+      const splitTextIntoChunks = (text: string, maxChars: number = 2500): string[] => {
+        const sanitized = sanitizeTextForTTS(text);
         const chunks: string[] = [];
-        const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+        const sentences = sanitized.match(/[^.!?]+[.!?]+/g) || [sanitized];
         
         let currentChunk = '';
         
@@ -967,7 +969,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           chunks.push(currentChunk.trim());
         }
         
-        return chunks;
+        return chunks.filter(chunk => chunk.length >= 10);
       };
       
       try {
@@ -989,8 +991,10 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           let ttsResult;
           try {
             console.log(`[Tour Generation] Calling TTS API for chunk ${i + 1}...`);
+            const sanitizedChunk = sanitizeTextForTTS(chunks[i]);
+            console.log(`[Tour Generation] Chunk sanitized, length: ${sanitizedChunk.length}`);
             ttsResult = await generateTTSMutation.mutateAsync({
-              text: chunks[i],
+              text: sanitizedChunk,
               voice: "alloy",
               speed: 1.0,
             });
