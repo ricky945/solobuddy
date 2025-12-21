@@ -1665,9 +1665,10 @@ const styles = StyleSheet.create({
   welcomeContent: {
     zIndex: 1,
     alignItems: "center",
-    gap: 20,
     width: "100%",
-    marginTop: 60,
+    marginTop: 52,
+    paddingHorizontal: 4,
+    gap: 16,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -1676,14 +1677,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 40,
     letterSpacing: -0.8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
   },
   welcomeSubtitle: {
     fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    marginTop: -12,
-    paddingHorizontal: 40,
+    marginTop: 0,
+    paddingHorizontal: 32,
     lineHeight: 24,
     fontWeight: "500" as const,
   },
@@ -1694,7 +1695,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     width: "100%",
-    marginTop: 12,
+    marginTop: 16,
     ...Platform.select({
       ios: {
         shadowColor: Colors.light.primary,
@@ -1973,14 +1974,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    marginTop: -12,
+    marginTop: 0,
   },
   generatingProgress: {
     fontSize: 15,
     color: Colors.light.primary,
     textAlign: "center",
     fontWeight: "600",
-    marginTop: -8,
+    marginTop: 0,
   },
   progressBarContainer: {
     width: "100%",
@@ -2064,11 +2065,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   passportMascot: {
-    marginBottom: -13,
     width: 173,
     height: 173,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 2,
   },
   passportMascotImage: {
     width: 173,
