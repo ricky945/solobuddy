@@ -76,7 +76,7 @@ export interface Route {
   totalTime: string;
 }
 
-export type SubscriptionTier = "free" | "unlimited" | "premium";
+export type SubscriptionTier = "free" | "weekly" | "yearly";
 
 export interface User {
   id: string;
@@ -92,6 +92,16 @@ export interface User {
     painPoint: string;
     referralCode: string;
   };
+  subscriptionExpiresAt?: number;
+}
+
+export interface SubscriptionOption {
+  id: SubscriptionTier;
+  name: string;
+  price: string;
+  duration: string;
+  savings?: string;
+  features: string[];
 }
 
 export interface UserProfile {

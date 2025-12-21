@@ -46,10 +46,11 @@ import {
   AUDIO_LENGTHS,
   TRANSPORT_METHODS,
 } from "@/mocks/tours";
-import { Topic, AudioLength, TransportMethod, AudioGuide } from "@/types";
+import { Topic, AudioLength, TransportMethod, AudioGuide, SubscriptionTier } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import { trpc } from "@/lib/trpc";
+import PaywallModal from "@/components/PaywallModal";
 
 const iconMap = {
   BookOpen,
@@ -68,7 +69,7 @@ type FlowStep = "welcome" | "tourType" | "location" | "landmarkDiscovery" | "lan
 export default function ExploreScreen() {
   const router = useRouter();
   const { addTour } = useTours();
-  const { incrementToursCreated } = useUser();
+  const { incrementToursCreated, canCreateTour, upgradeTier } = useUser();
   const [flowStep, setFlowStep] = useState<FlowStep>("welcome");
   const [tourType, setTourType] = useState<"route" | "immersive" | "landmark" | null>(null);
   const [location, setLocation] = useState<string>("");
@@ -83,6 +84,8 @@ export default function ExploreScreen() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
   const generateTTSMutation = trpc.tts.generate.useMutation();
   
@@ -677,6 +680,12 @@ For ${location}, return topics as JSON array:`;
   const handleGenerate = async () => {
     if (!canGenerate || !tourType) {
       console.log("[Tour Generation] Cannot generate: missing requirements");
+      return;
+    }
+
+    if (!canCreateTour()) {
+      console.log("[Tour Generation] User needs subscription");
+      setShowPaywall(true);
       return;
     }
 
@@ -1576,6 +1585,30 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
     }
   };
 
+  const handleSubscribe = (tier: SubscriptionTier) => {
+    console.log("[Subscription] User selected tier:", tier);
+    setIsProcessingSubscription(true);
+    
+    setTimeout(() => {
+      upgradeTier(tier);
+      setIsProcessingSubscription(false);
+      setShowPaywall(false);
+      
+      Alert.alert(
+        "Subscription Activated!",
+        `Welcome to ${tier === "weekly" ? "Weekly" : "Annual"} Premium! You now have unlimited access to AI tours.`,
+        [
+          {
+            text: "Continue",
+            onPress: () => {
+              handleGenerate();
+            },
+          },
+        ]
+      );
+    }, 1500);
+  };
+
   const showBackButton = flowStep !== "welcome" && flowStep !== "generating" && flowStep !== "landmarkTopicsLoading";
 
   return (
@@ -1604,6 +1637,13 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           {renderContent()}
         </ScrollView>
       </SafeAreaView>
+      
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSubscribe={handleSubscribe}
+        isProcessing={isProcessingSubscription}
+      />
     </LinearGradient>
   );
 }

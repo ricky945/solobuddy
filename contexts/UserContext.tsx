@@ -44,7 +44,19 @@ export const [UserProvider, useUser] = createContextHook(() => {
 
   const upgradeTier = (tier: SubscriptionTier) => {
     const toursRemaining = tier === "free" ? 2 : -1;
-    updateUserMutation.mutate({ subscriptionTier: tier, toursRemaining });
+    
+    let expiresAt: number | undefined;
+    if (tier === "weekly") {
+      expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    } else if (tier === "yearly") {
+      expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
+    }
+    
+    updateUserMutation.mutate({ 
+      subscriptionTier: tier, 
+      toursRemaining,
+      subscriptionExpiresAt: expiresAt,
+    });
   };
 
   const incrementToursCreated = () => {
@@ -61,9 +73,25 @@ export const [UserProvider, useUser] = createContextHook(() => {
     });
   };
 
+  const hasActiveSubscription = () => {
+    const user = userQuery.data || defaultUser;
+    if (user.subscriptionTier === "free") return false;
+    
+    if (user.subscriptionExpiresAt) {
+      return Date.now() < user.subscriptionExpiresAt;
+    }
+    
+    return false;
+  };
+
   const canCreateTour = () => {
     const user = userQuery.data || defaultUser;
-    return user.subscriptionTier !== "free" || user.toursRemaining > 0;
+    
+    if (hasActiveSubscription()) {
+      return true;
+    }
+    
+    return user.toursRemaining > 0;
   };
 
   const updateProfile = (profile: Partial<UserProfile>) => {
@@ -78,6 +106,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     upgradeTier,
     incrementToursCreated,
     canCreateTour,
+    hasActiveSubscription,
     updateProfile,
     updateUser: updateUserMutation.mutate,
   };
