@@ -51,7 +51,7 @@ import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
 import { splitIntoChunks } from "@/lib/text-sanitizer";
-import { generateTTS } from "@/lib/tts-client";
+import { trpc } from "@/lib/trpc";
 
 const iconMap = {
   BookOpen,
@@ -87,6 +87,8 @@ export default function ExploreScreen() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
+  
+  const generateTTSMutation = trpc.tts.generate.useMutation();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim1 = useRef(new Animated.Value(0)).current;
@@ -930,7 +932,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         try {
           console.log(`[TTS] Generating audio chunk, text length: ${text.length}`);
           
-          const result = await generateTTS({
+          const result = await generateTTSMutation.mutateAsync({
             text,
             voice: 'alloy',
             speed: 1.0,
