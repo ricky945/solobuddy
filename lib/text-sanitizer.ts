@@ -26,7 +26,7 @@ export function sanitizeTextForTTS(text: string): string {
   return cleaned;
 }
 
-export function splitIntoChunks(text: string, maxChars: number = 2800): string[] {
+export function splitIntoChunks(text: string, maxChars: number = 1900): string[] {
   const sanitized = sanitizeTextForTTS(text);
   
   if (sanitized.length <= maxChars) {
