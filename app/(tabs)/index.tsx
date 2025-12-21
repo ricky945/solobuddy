@@ -1668,7 +1668,7 @@ const styles = StyleSheet.create({
     width: "100%",
     marginTop: 52,
     paddingHorizontal: 4,
-    gap: 16,
+    gap: 4,
   },
   welcomeTitle: {
     fontSize: 32,
@@ -2069,7 +2069,7 @@ const styles = StyleSheet.create({
     height: 173,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginBottom: -8,
   },
   passportMascotImage: {
     width: 173,
