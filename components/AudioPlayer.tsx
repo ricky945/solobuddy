@@ -17,7 +17,7 @@ import {
   Volume2,
   ChevronDown,
   ChevronUp,
-  Download,
+
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -42,7 +42,6 @@ export default function AudioPlayer({
   const [audioReady, setAudioReady] = useState<boolean>(false);
   const [audioError, setAudioError] = useState<string>("");
   const [showChapters, setShowChapters] = useState<boolean>(false);
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
   
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -162,6 +161,9 @@ export default function AudioPlayer({
         setSound(newSound);
         setDuration(actualDuration);
         setAudioReady(true);
+        
+        await updateNowPlaying(newSound);
+        
         console.log("[AudioPlayer] Audio ready to play!");
       } catch (error: any) {
         console.error("[AudioPlayer] Error loading audio:", error);
@@ -205,38 +207,7 @@ export default function AudioPlayer({
     };
   }, [guide.audioUrl, guide.title, duration, onPlaybackStatusUpdate]);
 
-  const handleDownload = async () => {
-    try {
-      console.log("[AudioPlayer] Download requested");
-      setIsDownloading(true);
-      
-      Alert.alert(
-        "Download for Offline",
-        "This feature allows you to save the tour for offline playback. The audio file will be stored on your device.",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => setIsDownloading(false) },
-          {
-            text: "Download",
-            onPress: async () => {
-              try {
-                console.log("[AudioPlayer] Starting download...");
-                Alert.alert("Success", "Tour downloaded successfully! You can now play it offline.");
-                setIsDownloading(false);
-              } catch (error) {
-                console.error("[AudioPlayer] Download error:", error);
-                Alert.alert("Error", "Failed to download tour. Please try again.");
-                setIsDownloading(false);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error("[AudioPlayer] Download error:", error);
-      Alert.alert("Error", "Failed to initiate download.");
-      setIsDownloading(false);
-    }
-  };
+
 
   const configureAudioMode = async () => {
     try {
@@ -254,6 +225,26 @@ export default function AudioPlayer({
       console.error("[AudioPlayer] Error configuring audio mode:", error);
     }
   };
+
+  const updateNowPlaying = async (sound: Audio.Sound) => {
+    try {
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        await sound.setStatusAsync({
+          progressUpdateIntervalMillis: 500,
+        });
+      }
+      console.log("[AudioPlayer] Now playing metadata updated");
+    } catch (error) {
+      console.error("[AudioPlayer] Error updating now playing:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (sound && audioReady) {
+      console.log("[AudioPlayer] Setting up lock screen controls");
+      updateNowPlaying(sound);
+    }
+  }, [sound, audioReady, guide.title, guide.location]);
 
   const handlePlayPause = async () => {
     try {
@@ -389,17 +380,35 @@ export default function AudioPlayer({
         </View>
 
         <View style={styles.progressContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={duration}
-            value={position}
-            onSlidingComplete={handleSeek}
-            minimumTrackTintColor={Colors.light.primary}
-            maximumTrackTintColor={Colors.light.border}
-            thumbTintColor={Colors.light.primary}
-            disabled={!audioReady}
-          />
+          <View style={styles.sliderWrapper}>
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={duration}
+              value={position}
+              onSlidingComplete={handleSeek}
+              minimumTrackTintColor={Colors.light.primary}
+              maximumTrackTintColor={Colors.light.border}
+              thumbTintColor={Colors.light.primary}
+              disabled={!audioReady}
+            />
+            {guide.chapters && guide.chapters.length > 1 && (
+              <View style={styles.chapterMarkers}>
+                {guide.chapters.slice(1).map((chapter) => {
+                  const percentage = (chapter.timestamp * 1000 / duration) * 100;
+                  return (
+                    <View
+                      key={chapter.id}
+                      style={[
+                        styles.chapterMarker,
+                        { left: `${percentage}%` },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            )}
+          </View>
           <View style={styles.timeContainer}>
             <Text style={styles.timeText}>{formatTime(position)}</Text>
             <Text style={styles.timeText}>{formatTime(duration)}</Text>
@@ -408,38 +417,24 @@ export default function AudioPlayer({
 
         {guide.chapters && guide.chapters.length > 0 && (
           <>
-            <View style={styles.chaptersHeader}>
-              <TouchableOpacity
-                style={styles.currentChapter}
-                activeOpacity={0.7}
-                onPress={() => setShowChapters(!showChapters)}
-              >
-                <View style={styles.chapterInfo}>
-                  <Text style={styles.chapterLabel}>Now Playing</Text>
-                  <Text style={styles.chapterTitle} numberOfLines={1}>
-                    {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
-                      guide.chapters[0].title}
-                  </Text>
-                </View>
-                {showChapters ? (
-                  <ChevronDown size={20} color={Colors.light.textSecondary} />
-                ) : (
-                  <ChevronUp size={20} color={Colors.light.textSecondary} />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.downloadButton}
-                activeOpacity={0.7}
-                onPress={handleDownload}
-                disabled={isDownloading}
-              >
-                <Download size={18} color={Colors.light.primary} />
-                <Text style={styles.downloadButtonText}>
-                  {isDownloading ? "Downloading..." : "Download"}
+            <TouchableOpacity
+              style={styles.currentChapter}
+              activeOpacity={0.7}
+              onPress={() => setShowChapters(!showChapters)}
+            >
+              <View style={styles.chapterInfo}>
+                <Text style={styles.chapterLabel}>Now Playing</Text>
+                <Text style={styles.chapterTitle} numberOfLines={1}>
+                  {guide.chapters.find((c) => c.timestamp * 1000 <= position)?.title ||
+                    guide.chapters[0].title}
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+              {showChapters ? (
+                <ChevronDown size={20} color={Colors.light.textSecondary} />
+              ) : (
+                <ChevronUp size={20} color={Colors.light.textSecondary} />
+              )}
+            </TouchableOpacity>
 
             {showChapters && (
               <ScrollView
@@ -557,12 +552,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingBottom: 4,
     width: "100%",
     alignSelf: "stretch",
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
   },
   chaptersButton: {
     padding: 4,
@@ -622,9 +618,30 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
   },
+  sliderWrapper: {
+    position: "relative",
+    width: "100%",
+    height: 40,
+  },
   slider: {
     width: "100%",
     height: 40,
+  },
+  chapterMarkers: {
+    position: "absolute",
+    top: 18,
+    left: 0,
+    right: 0,
+    height: 4,
+    pointerEvents: "none",
+  },
+  chapterMarker: {
+    position: "absolute",
+    width: 2,
+    height: 10,
+    backgroundColor: Colors.light.text,
+    opacity: 0.4,
+    marginLeft: -1,
   },
   timeContainer: {
     flexDirection: "row",
@@ -635,11 +652,6 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     fontWeight: "500",
   },
-  chaptersHeader: {
-    width: "100%",
-    gap: 8,
-    marginVertical: 12,
-  },
   currentChapter: {
     backgroundColor: Colors.light.backgroundSecondary,
     padding: 16,
@@ -649,23 +661,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     width: "100%",
     alignSelf: "center",
-  },
-  downloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.light.backgroundSecondary,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.light.primary,
-  },
-  downloadButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: Colors.light.primary,
+    marginVertical: 12,
   },
   chapterInfo: {
     flex: 1,
