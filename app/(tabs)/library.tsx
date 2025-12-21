@@ -30,59 +30,63 @@ interface SwipeableCardProps {
 
 function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
-  const [isSwipedOpen, setIsSwipedOpen] = useState(false);
+  const [isSwipedOpen, setIsSwipedOpen] = useState<boolean>(false);
 
-  const resetSwipe = () => {
+  const clampX = (x: number) => Math.max(Math.min(x, 0), -80);
+
+  const snapTo = (toValue: number, nextOpen: boolean) => {
     Animated.spring(translateX, {
-      toValue: 0,
+      toValue,
       useNativeDriver: true,
-      tension: 100,
-      friction: 8,
+      tension: 120,
+      friction: 10,
     }).start(() => {
-      setIsSwipedOpen(false);
+      setIsSwipedOpen(nextOpen);
     });
   };
+
+  const resetSwipe = () => snapTo(0, false);
+  const openSwipe = () => snapTo(-80, true);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 5;
+        const dx = Math.abs(gestureState.dx);
+        const dy = Math.abs(gestureState.dy);
+        return dx > 6 && dx > dy * 1.25;
       },
-      onPanResponderTerminationRequest: () => true,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        const dx = Math.abs(gestureState.dx);
+        const dy = Math.abs(gestureState.dy);
+        return dx > 6 && dx > dy * 1.25;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        translateX.stopAnimation();
+      },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) {
-          translateX.setValue(Math.max(gestureState.dx, -80));
-        } else if (isSwipedOpen && gestureState.dx > 0) {
-          translateX.setValue(Math.min(-80 + gestureState.dx, 0));
-        }
+        const next = isSwipedOpen ? clampX(-80 + gestureState.dx) : clampX(gestureState.dx);
+        translateX.setValue(next);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (isSwipedOpen) {
-          if (gestureState.dx > 40) {
-            resetSwipe();
-          } else {
-            Animated.spring(translateX, {
-              toValue: -80,
-              useNativeDriver: true,
-              tension: 100,
-              friction: 8,
-            }).start();
-          }
+        const shouldOpen = isSwipedOpen ? !(gestureState.dx > 40) : gestureState.dx < -60;
+
+        if (shouldOpen) {
+          openSwipe();
         } else {
-          if (gestureState.dx < -100) {
-            Animated.spring(translateX, {
-              toValue: -80,
-              useNativeDriver: true,
-              tension: 100,
-              friction: 8,
-            }).start(() => {
-              setIsSwipedOpen(true);
-            });
+          resetSwipe();
+        }
+      },
+      onPanResponderTerminate: () => {
+        translateX.stopAnimation((value) => {
+          if (value <= -40) {
+            openSwipe();
           } else {
             resetSwipe();
           }
-        }
+        });
       },
     })
   ).current;
@@ -111,12 +115,14 @@ function SwipeableCard({ guide, onPress, onDelete, formatDuration }: SwipeableCa
   };
 
   return (
-    <View style={styles.swipeableContainer}>
+    <View style={styles.swipeableContainer} testID={`library-card-${guide.id}`}>
       <View style={styles.deleteButtonContainer}>
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={handleDelete}
           activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          testID={`library-card-${guide.id}-delete`}
         >
           <Trash2 size={22} color="#FFFFFF" />
         </TouchableOpacity>
