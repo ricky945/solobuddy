@@ -85,13 +85,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
   };
 
   const canCreateTour = () => {
-    const user = userQuery.data || defaultUser;
-    
-    if (hasActiveSubscription()) {
-      return true;
-    }
-    
-    return user.toursRemaining > 0;
+    return true;
   };
 
   const updateProfile = (profile: Partial<UserProfile>) => {
