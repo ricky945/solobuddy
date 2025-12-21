@@ -41,7 +41,6 @@ import { File, Paths } from "expo-file-system";
 import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
-import { trpc } from "@/lib/trpc";
 import {
   TOPICS,
   AUDIO_LENGTHS,
@@ -52,6 +51,7 @@ import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
 import { splitIntoChunks } from "@/lib/text-sanitizer";
+import { generateTTS } from "@/lib/tts-client";
 
 const iconMap = {
   BookOpen,
@@ -71,7 +71,6 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { addTour } = useTours();
   const { incrementToursCreated, canCreateTour, upgradeTier } = useUser();
-  const ttsGenerateMutation = trpc.tts.generate.useMutation();
   const [flowStep, setFlowStep] = useState<FlowStep>("welcome");
   const [tourType, setTourType] = useState<"route" | "immersive" | "landmark" | null>(null);
   const [location, setLocation] = useState<string>("");
@@ -931,9 +930,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       
       const generateAudioChunk = async (text: string): Promise<string> => {
         try {
-          console.log(`[TTS] Generating audio chunk via tRPC, text length: ${text.length}`);
+          console.log(`[TTS] Generating audio chunk, text length: ${text.length}`);
           
-          const result = await ttsGenerateMutation.mutateAsync({
+          const result = await generateTTS({
             text,
             voice: 'alloy',
             speed: 1.0,
@@ -943,16 +942,11 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             throw new Error('Failed to generate audio');
           }
           
-          console.log(`[TTS] Chunk generated successfully via tRPC`);
+          console.log(`[TTS] Chunk generated successfully`);
           return result.audioData;
         } catch (error: any) {
-          console.error(`[TTS] Error generating chunk via tRPC:`, error);
-          
-          if (error.message) {
-            throw new Error(error.message);
-          }
-          
-          throw new Error('Failed to generate audio. Please check your connection and try again.');
+          console.error(`[TTS] Error generating chunk:`, error);
+          throw error;
         }
       };
       
