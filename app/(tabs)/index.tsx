@@ -678,6 +678,32 @@ For ${location}, return topics as JSON array:`;
     ? location.trim() !== "" && selectedLandmarkTopics.length > 0
     : location.trim() !== "" && selectedTopics.length > 0;
 
+  const checkNetworkConnectivity = async (): Promise<boolean> => {
+    try {
+      console.log("[Network Check] Testing connectivity...");
+      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      if (!baseUrl) {
+        console.error("[Network Check] No base URL configured");
+        return false;
+      }
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      console.log("[Network Check] Health check status:", response.status);
+      return response.ok;
+    } catch (error) {
+      console.error("[Network Check] Failed:", error);
+      return false;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!canGenerate || !tourType) {
       console.log("[Tour Generation] Cannot generate: missing requirements");
@@ -687,6 +713,18 @@ For ${location}, return topics as JSON array:`;
     if (!canCreateTour()) {
       console.log("[Tour Generation] User needs subscription");
       setShowPaywall(true);
+      return;
+    }
+
+    console.log("[Tour Generation] Checking network connectivity...");
+    const isConnected = await checkNetworkConnectivity();
+    
+    if (!isConnected) {
+      Alert.alert(
+        "Connection Error",
+        "Cannot connect to the server. Please check your internet connection and try again.",
+        [{ text: "OK" }]
+      );
       return;
     }
 
@@ -928,9 +966,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
 
       let audioUrl: string = '';
       
-      const generateAudioChunk = async (text: string): Promise<string> => {
+      const generateAudioChunk = async (text: string, retryCount = 0): Promise<string> => {
         try {
-          console.log(`[TTS] Generating audio chunk, text length: ${text.length}`);
+          console.log(`[TTS] Generating audio chunk, text length: ${text.length}, attempt: ${retryCount + 1}`);
           
           const result = await generateTTSMutation.mutateAsync({
             text,
@@ -945,7 +983,19 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           console.log(`[TTS] Chunk generated successfully`);
           return result.audioData;
         } catch (error: any) {
-          console.error(`[TTS] Error generating chunk:`, error);
+          console.error(`[TTS] Error generating chunk (attempt ${retryCount + 1}):`, error);
+          
+          const errorMsg = error?.message || String(error);
+          const isNetworkError = errorMsg.toLowerCase().includes('network') || 
+                                errorMsg.toLowerCase().includes('fetch') || 
+                                errorMsg.toLowerCase().includes('connection');
+          
+          if (isNetworkError && retryCount < 2) {
+            console.log(`[TTS] Network error detected, retrying in 3 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            return generateAudioChunk(text, retryCount + 1);
+          }
+          
           throw error;
         }
       };
@@ -971,8 +1021,16 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             audioBlobs.push(audioData);
             console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length} completed`);
           } catch (chunkError: any) {
-            console.error(`[Tour Generation] Chunk ${i + 1} failed:`, chunkError.message);
-            throw new Error(`Audio generation failed at chunk ${i + 1}: ${chunkError.message}`);
+            const errorMsg = chunkError?.message || String(chunkError);
+            console.error(`[Tour Generation] Chunk ${i + 1} failed:`, errorMsg);
+            
+            if (errorMsg.toLowerCase().includes('network')) {
+              throw new Error(`Network connection lost during audio generation. Please check your internet connection and try again.`);
+            } else if (errorMsg.toLowerCase().includes('timeout')) {
+              throw new Error(`Request timed out. The server may be overloaded. Please try again in a moment.`);
+            } else {
+              throw new Error(`Audio generation failed at chunk ${i + 1}: ${errorMsg}`);
+            }
           }
         }
         
@@ -1000,13 +1058,16 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         
         let errorMessage = "Unable to generate audio. Please try again.";
         if (ttsError?.message) {
-          if (ttsError.message.includes('API key')) {
+          const msg = ttsError.message.toLowerCase();
+          if (msg.includes('api key')) {
             errorMessage = "API configuration error. Please contact support.";
-          } else if (ttsError.message.includes('Rate limit') || ttsError.message.includes('429')) {
+          } else if (msg.includes('rate limit') || msg.includes('429')) {
             errorMessage = "Too many requests. Please wait a moment and try again.";
-          } else if (ttsError.message.includes('network') || ttsError.message.includes('fetch')) {
-            errorMessage = "Network error. Please check your connection and try again.";
-          } else if (ttsError.message.includes('chunk')) {
+          } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connection')) {
+            errorMessage = "Network connection error. Please check your internet connection and try again.";
+          } else if (msg.includes('timeout')) {
+            errorMessage = "Request timed out. Please try again with a shorter tour or better connection.";
+          } else if (msg.includes('chunk') || msg.includes('audio generation failed')) {
             errorMessage = ttsError.message;
           }
         }
@@ -1106,16 +1167,37 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       resetFlow();
     } catch (error) {
       console.error("[Tour Generation] Error:", error);
+      console.error("[Tour Generation] Error type:", typeof error);
+      console.error("[Tour Generation] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
       
       if (!isMounted) {
         console.log("[Tour Generation] Component unmounted during error handling");
         return;
       }
       
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      let errorMessage = "Unknown error";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorMessage = (error as any).message || JSON.stringify(error);
+      }
+      
+      const lowerMsg = errorMessage.toLowerCase();
+      let userMessage = errorMessage;
+      
+      if (lowerMsg.includes('network request failed')) {
+        userMessage = "Network connection failed. Please check your internet connection and try again. If you're on mobile, try switching between WiFi and cellular data.";
+      } else if (lowerMsg.includes('network')) {
+        userMessage = "Network error occurred. Please check your connection and try again.";
+      } else if (lowerMsg.includes('timeout')) {
+        userMessage = "Request timed out. Please try again with a shorter tour duration or check your internet speed.";
+      }
+      
       Alert.alert(
         "Generation Failed",
-        `We couldn't generate your tour: ${errorMessage}. Please check your connection and try again.`,
+        userMessage,
         [{ text: "OK" }]
       );
       resetFlow();
