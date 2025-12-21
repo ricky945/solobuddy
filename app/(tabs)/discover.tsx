@@ -608,9 +608,9 @@ const styles = StyleSheet.create({
   centeredContainer: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "center",
     gap: 24,
-    paddingTop: 40,
+    paddingVertical: 40,
     position: "relative" as const,
   },
 
