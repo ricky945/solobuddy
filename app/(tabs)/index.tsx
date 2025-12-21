@@ -1231,7 +1231,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
   );
 
   const renderLocation = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <Text style={styles.questionTitle}>Where Are You Exploring?</Text>
       <View style={styles.inputWrapper}>
         <View style={styles.inputContainer}>
@@ -1282,7 +1282,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
   );
 
   const renderTopics = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <Text style={styles.questionTitle}>What Interests You?</Text>
       <Text style={styles.questionSubtitle}>Select one or more topics</Text>
       <View style={styles.topicsGrid}>
@@ -1427,7 +1427,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
   );
 
   const renderLandmarkDiscovery = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
       <Text style={styles.questionTitle}>Which Landmark Are You At?</Text>
       <View style={styles.inputWrapper}>
         <View style={styles.inputContainer}>
@@ -1718,7 +1718,7 @@ const styles = StyleSheet.create({
   },
   questionTitle: {
     fontSize: 26,
-    fontWeight: "600",
+    fontWeight: "700",
     color: Colors.light.text,
     textAlign: "center",
     marginBottom: 32,
@@ -1766,7 +1766,7 @@ const styles = StyleSheet.create({
   },
   fullOptionTitle: {
     fontSize: 18,
-    fontWeight: "500",
+    fontWeight: "400",
     color: Colors.light.text,
     textAlign: "center",
     letterSpacing: -0.3,
