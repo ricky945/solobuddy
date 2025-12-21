@@ -156,14 +156,15 @@ async function fetchWithRetry(
     
     clearTimeout(timeoutId);
     
-    if (response.status === 429 && retryCount < 2) {
+    if ((response.status === 429 || response.status === 503 || response.status === 502) && retryCount < 2) {
       const delay = isRateLimitRetry 
         ? RATE_LIMIT_RETRY_DELAY_MS * Math.pow(2, retryCount)
-        : RATE_LIMIT_RETRY_DELAY_MS;
+        : (response.status === 429 ? RATE_LIMIT_RETRY_DELAY_MS : RETRY_DELAY_MS * Math.pow(2, retryCount));
       
-      console.log(`[tRPC] Rate limited. Retrying in ${delay}ms...`);
+      const reason = response.status === 429 ? 'Rate limited' : 'Service unavailable';
+      console.log(`[tRPC] ${reason}. Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchWithRetry(url, options, retryCount + 1, true);
+      return fetchWithRetry(url, options, retryCount + 1, response.status === 429);
     }
     
     return response;
@@ -234,7 +235,7 @@ export const trpcClient = trpc.createClient({
             if (response.status === 403) {
               throw new Error('Access denied. The request may contain invalid characters or be too large. Please try with shorter text.');
             } else if (response.status === 404) {
-              throw new Error('Service temporarily unavailable. Please try again in a moment.');
+              throw new Error('Backend endpoint not found. Please check your connection.');
             } else if (response.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.');
             } else if (response.status === 502 || response.status === 503) {
