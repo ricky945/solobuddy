@@ -234,9 +234,11 @@ export const trpcClient = trpc.createClient({
             if (response.status === 403) {
               throw new Error('Access denied. The request may contain invalid characters or be too large. Please try with shorter text.');
             } else if (response.status === 404) {
-              throw new Error('Backend endpoint not found. Please check your connection.');
+              throw new Error('Service temporarily unavailable. Please try again in a moment.');
             } else if (response.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.');
+            } else if (response.status === 502 || response.status === 503) {
+              throw new Error('Service temporarily unavailable. Please try again in a moment.');
             } else if (response.status >= 500) {
               throw new Error('Server error. Please try again in a few moments.');
             }
