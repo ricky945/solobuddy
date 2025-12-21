@@ -15,10 +15,10 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Sparkles, User as UserIcon, Globe } from "lucide-react-native";
+import { Plus, MapPin, Sparkles, User as UserIcon, Globe, Bell } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
-import { MapLandmark } from "@/types";
+import { MapLandmark, LandmarkReview } from "@/types";
 import { trpc } from "@/lib/trpc";
 import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
@@ -56,6 +56,20 @@ function formatDistance(km: number): string {
   return `${km.toFixed(1)}km`;
 }
 
+function formatNotificationTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
+
 export default function ExploreScreen() {
   const { user } = useUser();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -67,6 +81,7 @@ export default function ExploreScreen() {
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
   
   const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -413,22 +428,33 @@ export default function ExploreScreen() {
           <Text style={styles.logoText}>SoloBuddy</Text>
         </View>
         
-        <TouchableOpacity 
-          style={styles.profileButton}
-          onPress={() => setShowProfileModal(true)}
-          activeOpacity={0.8}
-        >
-          {user.profile?.profilePictureUrl ? (
-            <Image 
-              source={{ uri: user.profile.profilePictureUrl }} 
-              style={styles.profileImage}
-            />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <UserIcon size={24} color={Colors.light.primary} />
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => setShowNotificationsModal(true)}
+            activeOpacity={0.8}
+            testID="notifications-button"
+          >
+            <Bell size={22} color={Colors.light.text} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => setShowProfileModal(true)}
+            activeOpacity={0.8}
+          >
+            {user.profile?.profilePictureUrl ? (
+              <Image 
+                source={{ uri: user.profile.profilePictureUrl }} 
+                style={styles.profileImage}
+              />
+            ) : (
+              <View style={styles.profilePlaceholder}>
+                <UserIcon size={24} color={Colors.light.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {activeQuery.isLoading && (
@@ -698,6 +724,105 @@ export default function ExploreScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal
+        visible={showNotificationsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotificationsModal(false)}
+      >
+        <View style={styles.notificationsModalContainer}>
+          <View style={styles.notificationsModalHeader}>
+            <Text style={styles.notificationsModalTitle}>Notifications</Text>
+            <TouchableOpacity onPress={() => setShowNotificationsModal(false)}>
+              <Text style={styles.closeButton}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.notificationsModalContent}>
+            {(() => {
+              const userLandmarks = landmarks.filter(l => l.createdBy === user.id && l.type === 'unique');
+              const notifications: { id: string; type: string; landmark: MapLandmark; review: LandmarkReview }[] = [];
+              
+              userLandmarks.forEach(landmark => {
+                landmark.reviews.forEach(review => {
+                  if (review.userId !== user.id) {
+                    notifications.push({
+                      id: `${landmark.id}-${review.id}`,
+                      type: 'review',
+                      landmark,
+                      review,
+                    });
+                  }
+                });
+              });
+              
+              notifications.sort((a, b) => b.review.createdAt - a.review.createdAt);
+              
+              if (notifications.length === 0) {
+                return (
+                  <View style={styles.noNotificationsContainer}>
+                    <View style={styles.noNotificationsIcon}>
+                      <Bell size={48} color={Colors.light.textSecondary} />
+                    </View>
+                    <Text style={styles.noNotificationsText}>No notifications yet</Text>
+                    <Text style={styles.noNotificationsSubtext}>
+                      You&apos;ll see updates here when people interact with your hidden gems
+                    </Text>
+                  </View>
+                );
+              }
+              
+              return notifications.map(notification => (
+                <TouchableOpacity
+                  key={notification.id}
+                  style={styles.notificationCard}
+                  onPress={() => {
+                    setShowNotificationsModal(false);
+                    setSelectedLandmark(notification.landmark);
+                    setIsModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.notificationIconWrap}>
+                    {notification.review.userAvatar ? (
+                      <Image 
+                        source={{ uri: notification.review.userAvatar }} 
+                        style={styles.notificationUserAvatar}
+                      />
+                    ) : (
+                      <View style={styles.notificationUserPlaceholder}>
+                        <UserIcon size={20} color={Colors.light.textSecondary} />
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.notificationContent}>
+                    <Text style={styles.notificationText}>
+                      <Text style={styles.notificationUserName}>{notification.review.userName}</Text>
+                      {' left a review on your landmark '}
+                      <Text style={styles.notificationLandmarkName}>{notification.landmark.name}</Text>
+                    </Text>
+                    
+                    {notification.review.comment && (
+                      <View style={styles.notificationReviewBox}>
+                        <Text style={styles.notificationRating}>★ {notification.review.rating}/5</Text>
+                        <Text style={styles.notificationComment} numberOfLines={2}>
+                          &quot;{notification.review.comment}&quot;
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <Text style={styles.notificationTime}>
+                      {formatNotificationTime(notification.review.createdAt)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ));
+            })()}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -778,6 +903,24 @@ const styles = StyleSheet.create({
     fontWeight: "700" as const,
     color: Colors.light.text,
     letterSpacing: -0.3,
+  },
+  headerActions: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 12,
+  },
+  notificationButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   profileButton: {
     width: 48,
@@ -1159,5 +1302,116 @@ const styles = StyleSheet.create({
   cardDesc: {
     fontSize: 13,
     color: Colors.light.textSecondary,
+  },
+  notificationsModalContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  notificationsModalHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+    marginTop: Platform.OS === "ios" ? 50 : 20,
+  },
+  notificationsModalTitle: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  notificationsModalContent: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  noNotificationsContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  noNotificationsIcon: {
+    marginBottom: 20,
+    opacity: 0.3,
+  },
+  noNotificationsText: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  noNotificationsSubtext: {
+    fontSize: 15,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  notificationCard: {
+    flexDirection: "row" as const,
+    padding: 16,
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  notificationIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  notificationUserAvatar: {
+    width: 44,
+    height: 44,
+  },
+  notificationUserPlaceholder: {
+    width: 44,
+    height: 44,
+    backgroundColor: Colors.light.backgroundSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationText: {
+    fontSize: 15,
+    color: Colors.light.text,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  notificationUserName: {
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  notificationLandmarkName: {
+    fontWeight: "700" as const,
+    color: Colors.light.primary,
+  },
+  notificationReviewBox: {
+    backgroundColor: Colors.light.backgroundSecondary,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  notificationRating: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: "#F59E0B",
+    marginBottom: 4,
+  },
+  notificationComment: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
+    fontStyle: "italic" as const,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontWeight: "500" as const,
   },
 });
