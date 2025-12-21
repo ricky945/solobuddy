@@ -88,7 +88,10 @@ export default function AudioPlayer({
         setAudioError("");
         setAudioReady(false);
         
-        await configureAudioMode();
+        const audioModeConfigured = await configureAudioMode();
+        if (!audioModeConfigured) {
+          console.error("[AudioPlayer] Failed to configure audio mode, continuing anyway...");
+        }
         
         console.log("[AudioPlayer] Creating sound object...");
         
@@ -220,9 +223,15 @@ export default function AudioPlayer({
         interruptionModeIOS: 2,
         interruptionModeAndroid: 2,
       });
-      console.log("[AudioPlayer] Audio mode configured for lock screen playback");
+      console.log("[AudioPlayer] Audio mode configured successfully for lock screen playback");
+      return true;
     } catch (error) {
-      console.error("[AudioPlayer] Error configuring audio mode:", error);
+      console.error("[AudioPlayer] CRITICAL: Failed to configure audio mode:", error);
+      Alert.alert(
+        "Audio Configuration Error",
+        "Background audio may not work properly. Please restart the app."
+      );
+      return false;
     }
   };
 
@@ -279,8 +288,12 @@ export default function AudioPlayer({
         setIsPlaying(false);
       } else {
         console.log("[AudioPlayer] Playing audio from position:", status.positionMillis);
+        
+        await configureAudioMode();
+        
         await sound.playAsync();
         setIsPlaying(true);
+        console.log("[AudioPlayer] Audio playing - will continue on locked screen");
       }
     } catch (error: any) {
       console.error("[AudioPlayer] Error during play/pause:", error);
