@@ -340,10 +340,9 @@ export default function RouteNavigationScreen() {
   const renderNavigateStep = () => (
     <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
       <View style={styles.landmarkIconContainer}>
-        <MapPin size={48} color={Colors.light.primary} />
+        <NavigationIcon size={48} color={Colors.light.primary} />
       </View>
       
-      <Text style={styles.stepTitle}>Navigate to</Text>
       <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
       
       {userLocation && distanceToLandmark && (
@@ -382,7 +381,6 @@ export default function RouteNavigationScreen() {
         <MapPin size={48} color={Colors.light.primary} />
       </View>
       
-      <Text style={styles.stepTitle}>Currently at</Text>
       <Text style={styles.landmarkName}>{currentLandmark.name}</Text>
       
       <View style={styles.audioPlayer}>
@@ -476,8 +474,6 @@ export default function RouteNavigationScreen() {
           >
             <X size={28} color={Colors.light.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{tour.title}</Text>
-          <View style={styles.headerSpacer} />
         </View>
 
         <View style={styles.progressBarContainer}>
@@ -593,9 +589,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   closeButton: {
     padding: 4,
@@ -608,12 +604,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginHorizontal: 12,
   },
-  headerSpacer: {
-    width: 36,
-  },
+
   progressBarContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
   progressBar: {
     height: 6,
@@ -638,11 +632,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 24,
+    paddingTop: 20,
   },
   stepContainer: {
     width: "100%",
     alignItems: "center",
-    gap: 20,
+    gap: 16,
   },
   landmarkIconContainer: {
     width: 96,
@@ -651,7 +646,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.backgroundSecondary,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   completeIcon: {
     backgroundColor: "#FEF3C7",
@@ -671,6 +666,7 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     textAlign: "center",
     lineHeight: 38,
+    marginTop: 4,
   },
   distanceBadge: {
     flexDirection: "row",
@@ -696,7 +692,7 @@ const styles = StyleSheet.create({
   buttonGroup: {
     width: "100%",
     gap: 12,
-    marginTop: 12,
+    marginTop: 8,
   },
   primaryButton: {
     flexDirection: "row",
