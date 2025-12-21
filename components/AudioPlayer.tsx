@@ -211,7 +211,7 @@ export default function AudioPlayer({
 
   const configureAudioMode = async () => {
     try {
-      console.log("[AudioPlayer] Configuring audio mode...");
+      console.log("[AudioPlayer] Configuring audio mode for background playback...");
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
@@ -220,7 +220,7 @@ export default function AudioPlayer({
         interruptionModeIOS: 2,
         interruptionModeAndroid: 2,
       });
-      console.log("[AudioPlayer] Audio mode configured");
+      console.log("[AudioPlayer] Audio mode configured for lock screen playback");
     } catch (error) {
       console.error("[AudioPlayer] Error configuring audio mode:", error);
     }
@@ -234,12 +234,7 @@ export default function AudioPlayer({
         return;
       }
       
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        await sound.setStatusAsync({
-          progressUpdateIntervalMillis: 500,
-        });
-      }
-      console.log("[AudioPlayer] Now playing metadata updated");
+      console.log("[AudioPlayer] Now playing metadata updated for lock screen");
     } catch (error) {
       console.error("[AudioPlayer] Error updating now playing:", error);
     }
