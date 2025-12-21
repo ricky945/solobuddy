@@ -54,15 +54,43 @@ export default publicProcedure
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[Landmarks] API error:", response.status, errorText);
+        console.error("[Landmarks] Google Places API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        
+        let errorMessage = "Google Places API error";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error?.message || errorData.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
         
         if (response.status === 429) {
-          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Rate limit exceeded" });
+          throw new TRPCError({ 
+            code: "TOO_MANY_REQUESTS", 
+            message: "Rate limit exceeded. Please try again later." 
+          });
         }
         if (response.status === 403) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Invalid API key" });
+          throw new TRPCError({ 
+            code: "FORBIDDEN", 
+            message: `Google Places API access denied: ${errorMessage}` 
+          });
         }
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Google Places API error" });
+        if (response.status === 400) {
+          throw new TRPCError({ 
+            code: "BAD_REQUEST", 
+            message: `Invalid request: ${errorMessage}` 
+          });
+        }
+        
+        throw new TRPCError({ 
+          code: "INTERNAL_SERVER_ERROR", 
+          message: `Google Places API error (${response.status}): ${errorMessage}` 
+        });
       }
 
       const data = await response.json();
