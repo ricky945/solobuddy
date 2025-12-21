@@ -1755,7 +1755,7 @@ const styles = StyleSheet.create({
   },
   fullOptionTitle: {
     fontSize: 18,
-    fontWeight: "400",
+    fontWeight: "500",
     color: Colors.light.text,
     textAlign: "center",
     letterSpacing: -0.3,
