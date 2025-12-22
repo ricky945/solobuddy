@@ -5,6 +5,8 @@ import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator } from "react-native";
 
+import "@/lib/supabase";
+
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { ToursProvider, useTours } from "@/contexts/ToursContext";
 import { trpc, trpcClient } from "@/lib/trpc";
