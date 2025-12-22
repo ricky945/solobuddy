@@ -103,7 +103,7 @@ export default function ExploreScreen() {
         return;
       }
       
-      const response = await fetch(`${baseUrl}/health`, {
+      const response = await fetch(`${baseUrl}/api/health`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -721,7 +721,7 @@ For ${location}, return topics as JSON array:`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch(`${baseUrl}/health`, {
+      const response = await fetch(`${baseUrl}/api/health`, {
         method: 'GET',
         signal: controller.signal,
       });
