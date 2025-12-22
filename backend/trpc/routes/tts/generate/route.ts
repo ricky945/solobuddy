@@ -2,13 +2,13 @@ import { z } from "zod";
 import { publicProcedure } from "@/backend/trpc/create-context";
 
 const ttsGenerateSchema = z.object({
-  text: z.string().max(2000, "Text too long for TTS (max 2000 chars)"),
+  text: z.string().max(1600, "Text too long for TTS (max 1600 chars)"),
   voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional().default("alloy"),
   speed: z.number().min(0.25).max(4.0).optional().default(1.0),
 });
 
 function sanitizeText(text: string): string {
-  return text
+  let cleaned = text
     .replace(/https?:\/\/[^\s]+/gi, '')
     .replace(/www\.[^\s]+/gi, '')
     .replace(/<script[^>]*>.*?<\/script>/gi, '')
@@ -31,6 +31,12 @@ function sanitizeText(text: string): string {
     .replace(/\s+/g, ' ')
     .replace(/[^a-zA-Z0-9\s.,!?;:()'"-]/g, '')
     .trim();
+  
+  if (cleaned.length > 1600) {
+    cleaned = cleaned.substring(0, 1600);
+  }
+  
+  return cleaned;
 }
 
 export default publicProcedure
