@@ -39,3 +39,5 @@ yarn-error.*
 .vercel
 
 .rork
+.env
+rork-eslint.config.js

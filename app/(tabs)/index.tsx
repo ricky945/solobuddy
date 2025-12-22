@@ -89,6 +89,37 @@ export default function ExploreScreen() {
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
   const generateTTSMutation = trpc.tts.generate.useMutation();
+  const [connectionStatus, setConnectionStatus] = useState<string>('checking');
+  
+  useEffect(() => {
+    checkBackendConnection();
+  }, []);
+  
+  const checkBackendConnection = async () => {
+    try {
+      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      if (!baseUrl) {
+        setConnectionStatus('error');
+        return;
+      }
+      
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        setConnectionStatus('connected');
+        console.log('[Connection Check] Backend is reachable');
+      } else {
+        setConnectionStatus('error');
+        console.error('[Connection Check] Backend returned error:', response.status);
+      }
+    } catch (error) {
+      setConnectionStatus('error');
+      console.error('[Connection Check] Failed to reach backend:', error);
+    }
+  };
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim1 = useRef(new Animated.Value(0)).current;
@@ -705,6 +736,20 @@ For ${location}, return topics as JSON array:`;
   };
 
   const handleGenerate = async () => {
+    if (connectionStatus === 'error') {
+      Alert.alert(
+        'Connection Error',
+        'Cannot reach the server. Please check your internet connection and try again.',
+        [
+          { text: 'Retry', onPress: async () => {
+            await checkBackendConnection();
+            setTimeout(() => handleGenerate(), 100);
+          }},
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
     if (!canGenerate || !tourType) {
       console.log("[Tour Generation] Cannot generate: missing requirements");
       return;
@@ -970,6 +1015,13 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         try {
           console.log(`[TTS] Generating audio chunk, text length: ${text.length}, attempt: ${retryCount + 1}`);
           
+          if (retryCount === 0) {
+            await checkBackendConnection();
+            if (connectionStatus === 'error') {
+              throw new Error('Cannot reach backend server. Please check your internet connection.');
+            }
+          }
+          
           const result = await generateTTSMutation.mutateAsync({
             text,
             voice: 'alloy',
@@ -988,12 +1040,25 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           const errorMsg = error?.message || String(error);
           const isNetworkError = errorMsg.toLowerCase().includes('network') || 
                                 errorMsg.toLowerCase().includes('fetch') || 
-                                errorMsg.toLowerCase().includes('connection');
+                                errorMsg.toLowerCase().includes('connection') ||
+                                errorMsg.toLowerCase().includes('failed to reach');
           
-          if (isNetworkError && retryCount < 2) {
-            console.log(`[TTS] Network error detected, retrying in 3 seconds...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
+          const isTimeout = errorMsg.toLowerCase().includes('timeout') ||
+                           errorMsg.toLowerCase().includes('aborted');
+          
+          if ((isNetworkError || isTimeout) && retryCount < 3) {
+            const delay = Math.min(3000 * Math.pow(2, retryCount), 10000);
+            console.log(`[TTS] ${isTimeout ? 'Timeout' : 'Network error'} detected, retrying in ${delay / 1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
             return generateAudioChunk(text, retryCount + 1);
+          }
+          
+          if (isNetworkError) {
+            throw new Error('Network connection lost. Please check your internet connection and try again.');
+          }
+          
+          if (isTimeout) {
+            throw new Error('Request timed out. The server may be busy. Please try again in a moment.');
           }
           
           throw error;
@@ -1189,10 +1254,12 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       
       if (lowerMsg.includes('network request failed')) {
         userMessage = "Network connection failed. Please check your internet connection and try again. If you're on mobile, try switching between WiFi and cellular data.";
-      } else if (lowerMsg.includes('network')) {
-        userMessage = "Network error occurred. Please check your connection and try again.";
+      } else if (lowerMsg.includes('cannot reach backend')) {
+        userMessage = "Cannot connect to the server. Please check your internet connection and try again.";
+      } else if (lowerMsg.includes('network') || lowerMsg.includes('connection')) {
+        userMessage = "Network error occurred. Please check your connection and try again. If the problem persists, try restarting the app.";
       } else if (lowerMsg.includes('timeout')) {
-        userMessage = "Request timed out. Please try again with a shorter tour duration or check your internet speed.";
+        userMessage = "Request timed out. The server may be busy. Please try again in a moment or choose a shorter tour duration.";
       }
       
       Alert.alert(
