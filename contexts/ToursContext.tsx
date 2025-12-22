@@ -1,9 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AudioGuide } from "@/types";
 import { mockAudioGuides } from "@/mocks/tours";
+import { kvGetItem, kvRemoveItem, kvSetItem } from "@/lib/kv-storage";
+import { AudioGuide } from "@/types";
 
 const STORAGE_KEY = "@solobuddy:tours";
 
@@ -14,7 +14,7 @@ export const [ToursProvider, useTours] = createContextHook(() => {
     queryKey: ["tours"],
     queryFn: async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        const stored = await kvGetItem(STORAGE_KEY);
         if (!stored) {
           return mockAudioGuides;
         }
@@ -35,7 +35,7 @@ export const [ToursProvider, useTours] = createContextHook(() => {
         if (error instanceof Error && error.message.includes('QuotaExceeded')) {
           console.log("[ToursContext] Storage quota exceeded, clearing old data...");
           try {
-            await AsyncStorage.removeItem(STORAGE_KEY);
+            await kvRemoveItem(STORAGE_KEY);
           } catch (clearError) {
             console.error("[ToursContext] Failed to clear storage:", clearError);
           }
@@ -70,7 +70,7 @@ export const [ToursProvider, useTours] = createContextHook(() => {
       console.log("[ToursContext] Data size:", Math.round(jsonString.length / 1024), "KB");
       
       try {
-        await AsyncStorage.setItem(STORAGE_KEY, jsonString);
+        await kvSetItem(STORAGE_KEY, jsonString);
         console.log("[ToursContext] Tours saved successfully");
       } catch (error) {
         if (error instanceof Error && error.message.includes('QuotaExceeded')) {
@@ -81,12 +81,12 @@ export const [ToursProvider, useTours] = createContextHook(() => {
           console.log("[ToursContext] Reduced data size:", Math.round(reducedJson.length / 1024), "KB");
           
           try {
-            await AsyncStorage.setItem(STORAGE_KEY, reducedJson);
+            await kvSetItem(STORAGE_KEY, reducedJson);
             console.log("[ToursContext] Saved with reduced tours");
             return tours.slice(0, 5);
           } catch (retryError) {
             console.error("[ToursContext] Failed to save even with reduced size:", retryError);
-            await AsyncStorage.removeItem(STORAGE_KEY);
+            await kvRemoveItem(STORAGE_KEY);
             throw new Error("Storage quota exceeded. Please delete some tours.");
           }
         }

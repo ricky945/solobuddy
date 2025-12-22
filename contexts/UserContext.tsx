@@ -1,8 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { User, SubscriptionTier, UserProfile } from "@/types";
+import { kvGetItem, kvSetItem } from "@/lib/kv-storage";
+import { SubscriptionTier, User, UserProfile } from "@/types";
 
 const STORAGE_KEY = "@solobuddy:user";
 
@@ -21,7 +21,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     queryKey: ["user"],
     queryFn: async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        const stored = await kvGetItem(STORAGE_KEY);
         return stored ? JSON.parse(stored) : defaultUser;
       } catch (error) {
         console.error("Error loading user:", error);
@@ -34,7 +34,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     mutationFn: async (updates: Partial<User>) => {
       const currentUser = userQuery.data || defaultUser;
       const updatedUser = { ...currentUser, ...updates };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+      await kvSetItem(STORAGE_KEY, JSON.stringify(updatedUser));
       return updatedUser;
     },
     onSuccess: (data) => {
