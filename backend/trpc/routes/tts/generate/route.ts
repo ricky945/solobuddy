@@ -24,12 +24,15 @@ function sanitizeText(text: string): string {
     .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')
     .replace(/[\u{2600}-\u{26FF}]/gu, '')
     .replace(/[\u{2700}-\u{27BF}]/gu, '')
-    .replace(/[<>{}\[\]\\|`$%&]/g, '')
+    .replace(/[<>{}[\]\\|`$%&*+=~^#@]/g, '')
     .replace(/["''""]/g, "'")
     .replace(/[—–]/g, '-')
     .replace(/[…]/g, '...')
     .replace(/\s+/g, ' ')
+    .replace(/(select|insert|update|delete|drop|create|alter|exec|execute|script|union|declare)/gi, '')
     .replace(/[^a-zA-Z0-9\s.,!?;:()'"-]/g, '')
+    .replace(/([.,!?;:])\\1+/g, '$1')
+    .replace(/\.{4,}/g, '...')
     .trim();
   
   if (cleaned.length > 1600) {
