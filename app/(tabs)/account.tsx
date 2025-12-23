@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -79,6 +79,16 @@ const getCountryFlag = (country: string): string => {
   return countryToFlag[country] || "🌍";
 };
 
+type BackendCheckStatus = "idle" | "checking" | "ok" | "error";
+
+type BackendCheckState = {
+  status: BackendCheckStatus;
+  message: string;
+  httpStatus?: number;
+  baseUrl?: string;
+  checkedAt?: string;
+};
+
 export default function AccountScreen() {
   const {
     user,
@@ -95,6 +105,113 @@ export default function AccountScreen() {
   } = useUser();
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  const backendBaseUrl = useMemo(() => {
+    const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    return url ? url.toString() : "";
+  }, []);
+
+  const [backendCheck, setBackendCheck] = useState<BackendCheckState>({
+    status: "idle",
+    message: "Not checked yet",
+    baseUrl: backendBaseUrl,
+  });
+
+  const checkBackendHealth = useCallback(async () => {
+    console.log("[Connection Check] Starting backend health check...");
+    console.log("[Connection Check] Base URL:", backendBaseUrl);
+
+    if (!backendBaseUrl) {
+      setBackendCheck({
+        status: "error",
+        message: "Missing EXPO_PUBLIC_RORK_API_BASE_URL",
+        baseUrl: backendBaseUrl,
+        checkedAt: new Date().toISOString(),
+      });
+      Alert.alert("Backend not configured", "Missing backend base URL. Please contact support.");
+      return;
+    }
+
+    setBackendCheck((prev) => ({
+      ...prev,
+      status: "checking",
+      message: "Checking /health…",
+      baseUrl: backendBaseUrl,
+    }));
+
+    const healthUrl = `${backendBaseUrl.replace(/\/$/, "")}/health`;
+
+    try {
+      const startedAt = Date.now();
+      const res = await fetch(healthUrl, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+      });
+      const elapsedMs = Date.now() - startedAt;
+
+      console.log("[Connection Check] /health response:", {
+        status: res.status,
+        ok: res.ok,
+        elapsedMs,
+        url: healthUrl,
+      });
+
+      let bodyText = "";
+      let json: unknown = null;
+
+      try {
+        const contentType = res.headers.get("content-type") ?? "";
+        if (contentType.includes("application/json")) {
+          json = await res.json();
+        } else {
+          bodyText = await res.text();
+        }
+      } catch (e) {
+        console.error("[Connection Check] Failed to parse /health response", e);
+      }
+
+      if (!res.ok) {
+        setBackendCheck({
+          status: "error",
+          message: `Backend returned error: ${res.status}`,
+          httpStatus: res.status,
+          baseUrl: backendBaseUrl,
+          checkedAt: new Date().toISOString(),
+        });
+        Alert.alert(
+          "Backend error",
+          `Backend health check failed (HTTP ${res.status}).\n\nURL: ${healthUrl}`
+        );
+        return;
+      }
+
+      const detail = json ? JSON.stringify(json).slice(0, 300) : bodyText.slice(0, 300);
+      setBackendCheck({
+        status: "ok",
+        message: `Healthy (${elapsedMs}ms)`,
+        httpStatus: res.status,
+        baseUrl: backendBaseUrl,
+        checkedAt: new Date().toISOString(),
+      });
+
+      console.log("[Connection Check] Backend healthy details (truncated):", detail);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Network error";
+      console.error("[Connection Check] Health check failed", e);
+      setBackendCheck({
+        status: "error",
+        message: msg,
+        baseUrl: backendBaseUrl,
+        checkedAt: new Date().toISOString(),
+      });
+      Alert.alert(
+        "Connection failed",
+        Platform.OS === "web"
+          ? "Could not reach backend. Check your internet connection or CORS settings."
+          : "Could not reach backend. Please check your connection and try again."
+      );
+    }
+  }, [backendBaseUrl]);
   const [editName, setEditName] = useState(user.profile?.name || "");
   const [editBio, setEditBio] = useState(user.profile?.bio || "");
   const [editCurrentCity, setEditCurrentCity] = useState(user.profile?.currentCity || "");
@@ -348,6 +465,58 @@ export default function AccountScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.pageTitle}>Account</Text>
+
+          <View style={styles.backendCard} testID="backend-check-card">
+            <View style={styles.backendHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.backendTitle}>Backend</Text>
+                <Text style={styles.backendSubtitle} numberOfLines={2}>
+                  {backendCheck.baseUrl ? backendCheck.baseUrl : "No base URL configured"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.backendButton,
+                  backendCheck.status === "checking" ? styles.backendButtonDisabled : null,
+                ]}
+                activeOpacity={0.85}
+                disabled={backendCheck.status === "checking"}
+                onPress={checkBackendHealth}
+                testID="backend-check-button"
+              >
+                {backendCheck.status === "checking" ? (
+                  <ActivityIndicator color={"#FFFFFF"} />
+                ) : (
+                  <Text style={styles.backendButtonText}>Check</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.backendStatusRow} testID="backend-check-status">
+              <View
+                style={[
+                  styles.backendDot,
+                  backendCheck.status === "ok"
+                    ? styles.backendDotOk
+                    : backendCheck.status === "error"
+                      ? styles.backendDotError
+                      : backendCheck.status === "checking"
+                        ? styles.backendDotChecking
+                        : styles.backendDotIdle,
+                ]}
+              />
+              <Text style={styles.backendStatusText} numberOfLines={2}>
+                {backendCheck.message}
+                {backendCheck.httpStatus ? ` (HTTP ${backendCheck.httpStatus})` : ""}
+              </Text>
+            </View>
+
+            {backendCheck.checkedAt ? (
+              <Text style={styles.backendMetaText} numberOfLines={1}>
+                Last checked: {new Date(backendCheck.checkedAt).toLocaleString()}
+              </Text>
+            ) : null}
+          </View>
 
           <View style={styles.authCard} testID="account-auth-card">
             <View style={styles.authHeaderRow}>
@@ -688,6 +857,84 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  backendCard: {
+    backgroundColor: "#0B1220",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  backendHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backendTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
+  },
+  backendSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.72)",
+  },
+  backendButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 84,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backendButtonDisabled: {
+    opacity: 0.7,
+  },
+  backendButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 13,
+    letterSpacing: -0.1,
+  },
+  backendStatusRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  backendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  backendDotIdle: {
+    backgroundColor: "rgba(255,255,255,0.35)",
+  },
+  backendDotChecking: {
+    backgroundColor: "#F59E0B",
+  },
+  backendDotOk: {
+    backgroundColor: "#22C55E",
+  },
+  backendDotError: {
+    backgroundColor: "#EF4444",
+  },
+  backendStatusText: {
+    flex: 1,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "600",
+  },
+  backendMetaText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
+  },
+
+  
   container: {
     flex: 1,
     backgroundColor: Colors.light.backgroundSecondary,
