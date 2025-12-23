@@ -6,7 +6,7 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
-console.log("[Backend] Starting Hono server v1.3.1 - Backend active");
+console.log("[Backend] Starting Hono server v1.3.3 - Backend active");
 console.log("[Backend] Environment:", {
   nodeEnv: process.env.NODE_ENV,
   hasOpenAI: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY
@@ -69,6 +69,7 @@ const attachTrpcHandler = (mountPath: string) => {
     trpcServer({
       router: appRouter,
       createContext,
+      endpoint: mountPath,
       onError({ error, path }) {
         console.error(`[tRPC] Error on ${path}:`, error);
         console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
