@@ -35,52 +35,106 @@ export function sanitizeTextForTTS(text: string): string {
   return cleaned;
 }
 
-export function splitIntoChunks(text: string, maxChars: number = 1200): string[] {
-  const sanitized = sanitizeTextForTTS(text);
-  
-  if (sanitized.length <= maxChars) {
-    return [sanitized];
-  }
-  
-  const chunks: string[] = [];
-  const sentences = sanitized.match(/[^.!?]+[.!?]+/g) || [sanitized];
-  
-  let currentChunk = '';
-  
-  for (const sentence of sentences) {
-    const trimmedSentence = sentence.trim();
-    
-    if (!trimmedSentence) continue;
-    
-    if ((currentChunk + ' ' + trimmedSentence).length <= maxChars) {
-      currentChunk += (currentChunk ? ' ' : '') + trimmedSentence;
+type SplitChunksOptions = {
+  minWords?: number;
+  maxWords?: number;
+  maxChars?: number;
+};
+
+function countWords(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length;
+}
+
+function splitLongSentenceByWords(sentence: string, maxChars: number): string[] {
+  const words = sentence.trim().split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) out.push(current.trim());
+
+    if (word.length > maxChars) {
+      out.push(word.substring(0, maxChars));
+      current = "";
     } else {
-      if (currentChunk) {
-        chunks.push(currentChunk.trim());
-      }
-      
-      if (trimmedSentence.length > maxChars) {
-        const words = trimmedSentence.split(/\s+/);
-        let wordChunk = '';
-        
-        for (const word of words) {
-          if ((wordChunk + ' ' + word).length <= maxChars) {
-            wordChunk += (wordChunk ? ' ' : '') + word;
-          } else {
-            if (wordChunk) chunks.push(wordChunk.trim());
-            wordChunk = word.length > maxChars ? word.substring(0, maxChars) : word;
-          }
-        }
-        if (wordChunk) currentChunk = wordChunk;
-      } else {
-        currentChunk = trimmedSentence;
-      }
+      current = word;
     }
   }
-  
-  if (currentChunk) {
-    chunks.push(currentChunk.trim());
+
+  if (current) out.push(current.trim());
+  return out;
+}
+
+export function splitIntoChunks(text: string, maxCharsOrOptions: number | SplitChunksOptions = 1200): string[] {
+  const sanitized = sanitizeTextForTTS(text);
+
+  const options: SplitChunksOptions =
+    typeof maxCharsOrOptions === "number" ? { maxChars: maxCharsOrOptions } : maxCharsOrOptions;
+
+  const minWords = options.minWords ?? 200;
+  const maxWords = options.maxWords ?? 300;
+  const maxChars = options.maxChars ?? 1200;
+
+  if (!sanitized) return [];
+
+  const sentences = sanitized.match(/[^.!?]+[.!?]+/g) || [sanitized];
+
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  const pushCurrent = () => {
+    const trimmed = currentChunk.trim();
+    if (trimmed.length >= 10) chunks.push(trimmed);
+    currentChunk = "";
+  };
+
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    if (!trimmedSentence) continue;
+
+    const sentenceParts =
+      trimmedSentence.length > maxChars
+        ? splitLongSentenceByWords(trimmedSentence, maxChars)
+        : [trimmedSentence];
+
+    for (const part of sentenceParts) {
+      const candidate = currentChunk ? `${currentChunk} ${part}` : part;
+      const candidateWords = countWords(candidate);
+
+      if (candidate.length <= maxChars && candidateWords <= maxWords) {
+        currentChunk = candidate;
+        continue;
+      }
+
+      const currentWords = countWords(currentChunk);
+
+      if (currentChunk && (currentWords >= minWords || currentChunk.length >= Math.floor(maxChars * 0.75))) {
+        pushCurrent();
+        currentChunk = part;
+        continue;
+      }
+
+      if (!currentChunk) {
+        currentChunk = part.substring(0, maxChars);
+        pushCurrent();
+        continue;
+      }
+
+      pushCurrent();
+      currentChunk = part;
+    }
   }
-  
-  return chunks.filter(chunk => chunk.length >= 10);
+
+  if (currentChunk) pushCurrent();
+
+  if (chunks.length === 0 && sanitized.length > 0) return [sanitized.substring(0, maxChars)];
+
+  return chunks;
 }
