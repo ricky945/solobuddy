@@ -46,6 +46,16 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   },
 });
 
+export type PublicTableName =
+  | "profiles"
+  | "landmarks"
+  | "landmark_upvotes"
+  | "landmark_reviews"
+  | "tours"
+  | "tour_stops"
+  | "audio_clips"
+  | "tts_audio_chunks";
+
 export async function supabaseExchangeCodeForSessionFromUrl(url: string) {
   try {
     const parsed = new URL(url);
