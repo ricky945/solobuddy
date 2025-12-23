@@ -21,6 +21,7 @@ import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
 import { trpc } from "@/lib/trpc";
+import { sanitizeTextForTTS } from "@/lib/text-sanitizer";
 
 type ViewMode = "text" | "audio";
 
@@ -315,8 +316,11 @@ Write 3-4 paragraphs with rich detail. Be conversational and enthusiastic.`;
     console.log("[Discover] Generating audio...");
 
     try {
+      const sanitized = sanitizeTextForTTS(analysisResult);
+      console.log("[Discover] Text length after sanitization:", sanitized.length);
+      
       const ttsResult = await generateTTSMutation.mutateAsync({
-        text: analysisResult,
+        text: sanitized,
         voice: "alloy",
         speed: 1.0,
       });

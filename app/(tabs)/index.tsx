@@ -52,6 +52,7 @@ import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
 
 import { trpc } from "@/lib/trpc";
+import { splitIntoChunks, sanitizeTextForTTS } from "@/lib/text-sanitizer";
 
 const iconMap = {
   BookOpen,
@@ -712,50 +713,7 @@ For ${location}, return topics as JSON array:`;
     ? location.trim() !== "" && selectedLandmarkTopics.length > 0
     : location.trim() !== "" && selectedTopics.length > 0;
 
-  const splitTextIntoChunks = (text: string, maxChunkSize: number): string[] => {
-    const clean = text.replace(/\s+/g, " ").trim();
-    if (!clean) return [];
 
-    const chunks: string[] = [];
-    let current = "";
-
-    const pushCurrent = () => {
-      const trimmed = current.trim();
-      if (trimmed) chunks.push(trimmed);
-      current = "";
-    };
-
-    const parts = clean.split(/(?<=[.!?])\s+/);
-    for (const part of parts) {
-      const sentence = part.trim();
-      if (!sentence) continue;
-
-      if (sentence.length > maxChunkSize) {
-        if (current) pushCurrent();
-        for (let i = 0; i < sentence.length; i += maxChunkSize) {
-          const slice = sentence.slice(i, i + maxChunkSize).trim();
-          if (slice) chunks.push(slice);
-        }
-        continue;
-      }
-
-      if (!current) {
-        current = sentence;
-        continue;
-      }
-
-      if ((current.length + 1 + sentence.length) <= maxChunkSize) {
-        current = `${current} ${sentence}`;
-      } else {
-        pushCurrent();
-        current = sentence;
-      }
-    }
-
-    if (current) pushCurrent();
-
-    return chunks;
-  };
 
   const checkNetworkConnectivity = async (): Promise<boolean> => {
     try {
@@ -1070,8 +1028,11 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
             }
           }
           
+          const sanitized = sanitizeTextForTTS(text);
+          console.log(`[TTS] Text length after sanitization: ${sanitized.length}`);
+          
           const result = await generateTTSMutation.mutateAsync({
-            text,
+            text: sanitized,
             voice: 'alloy',
             speed: 1.0,
           });
@@ -1116,7 +1077,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       try {
         console.log("[Tour Generation] Generating TTS audio...");
         
-        const chunks = splitTextIntoChunks(audioScript, 1500);
+        const chunks = splitIntoChunks(audioScript, 1200);
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
         
         const audioBlobs: string[] = [];

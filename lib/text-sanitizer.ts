@@ -23,19 +23,19 @@ export function sanitizeTextForTTS(text: string): string {
     .replace(/[…]/g, '...')
     .replace(/\s+/g, ' ')
     .replace(/(select|insert|update|delete|drop|create|alter|exec|execute|script|union|declare)/gi, '')
-    .replace(/[^a-zA-Z0-9\s.,!?;:()'"-]/g, '')
-    .replace(/([.,!?;:])\\1+/g, '$1')
+    .replace(/[^a-zA-Z0-9\s.,!?;:()'"\-]/g, '')
+    .replace(/([.,!?;:])\1+/g, '$1')
     .replace(/\.{4,}/g, '...')
     .trim();
   
-  if (cleaned.length > 4000) {
-    cleaned = cleaned.substring(0, 4000);
+  if (cleaned.length > 1400) {
+    cleaned = cleaned.substring(0, 1400);
   }
   
   return cleaned;
 }
 
-export function splitIntoChunks(text: string, maxChars: number = 1500): string[] {
+export function splitIntoChunks(text: string, maxChars: number = 1200): string[] {
   const sanitized = sanitizeTextForTTS(text);
   
   if (sanitized.length <= maxChars) {
