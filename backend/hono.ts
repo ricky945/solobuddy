@@ -6,7 +6,7 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
-console.log("[Backend] Starting Hono server v1.3.3 - Backend active");
+console.log("[Backend] Starting Hono server v1.3.4 - Backend active");
 console.log("[Backend] Environment:", {
   nodeEnv: process.env.NODE_ENV,
   hasOpenAI: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY
@@ -29,60 +29,41 @@ app.get("/health", (c) => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     routes: {
-      trpc: "/api/trpc (external) -> /trpc (backend internal)",
-      available: true,
-      endpoints: [
-        "tts.generate",
-        "tours.save",
-        "landmarks.discover",
-        "landmarks.add",
-        "landmarks.getLocationName",
-        "landmarks.getAll",
-        "landmarks.upvote",
-        "landmarks.addReview",
-        "landmarks.delete"
-      ]
+      trpc: "/api/trpc",
+      available: true
     }
   });
 });
 
-const attachTrpcLogging = (mountPath: string) => {
-  app.use(`${mountPath}/*`, async (c, next) => {
-    const startTime = Date.now();
-    const path = new URL(c.req.url).pathname;
-    console.log(`[Hono] ${c.req.method} ${path}`);
-    try {
-      await next();
-      const duration = Date.now() - startTime;
-      console.log(`[Hono] ✓ ${path} completed in ${duration}ms`);
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[Hono] ✗ ${path} failed after ${duration}ms:`, error);
-      throw error;
-    }
-  });
-};
+// Logging middleware for tRPC
+app.use("/api/trpc/*", async (c, next) => {
+  const startTime = Date.now();
+  const path = new URL(c.req.url).pathname;
+  console.log(`[Hono] ${c.req.method} ${path}`);
+  try {
+    await next();
+    const duration = Date.now() - startTime;
+    console.log(`[Hono] ✓ ${path} completed in ${duration}ms`);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[Hono] ✗ ${path} failed after ${duration}ms:`, error);
+    throw error;
+  }
+});
 
-const attachTrpcHandler = (mountPath: string) => {
-  app.use(
-    `${mountPath}/*`,
-    trpcServer({
-      router: appRouter,
-      createContext,
-      endpoint: mountPath,
-      onError({ error, path }) {
-        console.error(`[tRPC] Error on ${path}:`, error);
-        console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
-      },
-    })
-  );
-};
-
-attachTrpcLogging("/api/trpc");
-attachTrpcHandler("/api/trpc");
-
-attachTrpcLogging("/trpc");
-attachTrpcHandler("/trpc");
+// tRPC Handler
+app.use(
+  "/api/trpc/*",
+  trpcServer({
+    router: appRouter,
+    createContext,
+    endpoint: "/api/trpc",
+    onError({ error, path }) {
+      console.error(`[tRPC] Error on ${path}:`, error);
+      console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
+    },
+  })
+);
 
 app.onError((err, c) => {
   console.error("[Hono] Error:", err);
