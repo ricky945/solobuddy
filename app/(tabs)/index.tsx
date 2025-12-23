@@ -1252,6 +1252,26 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       
       console.log("[Tour Generation] Tour saved successfully");
 
+      if (tourType === "route" && transportMethod === "walking") {
+        Alert.alert(
+          "Tour Created!",
+          "Your walking tour is ready.",
+          [
+            {
+              text: "Start Tour",
+              onPress: () => router.push(`/tour-ready?tourId=${tourId}`),
+            },
+            {
+              text: "View Library",
+              onPress: () => router.push("/library"),
+            },
+          ]
+        );
+
+        resetFlow();
+        return;
+      }
+
       Alert.alert(
         "Tour Created!",
         "Your audio tour has been generated and added to your library.",
