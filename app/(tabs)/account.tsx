@@ -31,6 +31,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useUser } from "@/contexts/UserContext";
+import { AuthAppleButton } from "@/components/AuthAppleButton";
 
 const getCountryFlag = (country: string): string => {
   const countryToFlag: Record<string, string> = {
@@ -312,7 +313,7 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="account-screen">
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <ScrollView
@@ -321,6 +322,14 @@ export default function AccountScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.pageTitle}>Account</Text>
+
+          <View style={styles.authCard} testID="account-auth-card">
+            <Text style={styles.authTitle}>Sign in</Text>
+            <Text style={styles.authSubtitle}>Sync your profile across devices and keep your tours safe.</Text>
+            <View style={styles.authActions}>
+              <AuthAppleButton />
+            </View>
+          </View>
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
               <View style={styles.profilePicture}>
@@ -466,6 +475,7 @@ export default function AccountScreen() {
                 style={styles.settingItem}
                 activeOpacity={0.7}
                 onPress={handleLogout}
+                testID="account-logout"
               >
                 <View style={[styles.settingIcon, styles.settingIconDanger]}>
                   <LogOut size={20} color={Colors.light.error} />
@@ -484,6 +494,7 @@ export default function AccountScreen() {
                 style={styles.settingItem}
                 activeOpacity={0.7}
                 onPress={handleDeleteAccount}
+                testID="account-delete"
               >
                 <View style={[styles.settingIcon, styles.settingIconDanger]}>
                   <Trash2 size={20} color={Colors.light.error} />
@@ -812,6 +823,30 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600" as const,
     color: Colors.light.text,
+  },
+  authCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  authTitle: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
+    marginBottom: 6,
+  },
+  authSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.light.textSecondary,
+    marginBottom: 14,
+  },
+  authActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   settingsCard: {
     backgroundColor: Colors.light.card,

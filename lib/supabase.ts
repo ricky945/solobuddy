@@ -14,3 +14,40 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     detectSessionInUrl: false,
   },
 });
+
+export async function supabaseExchangeCodeForSessionFromUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const code = parsed.searchParams.get("code");
+    const errorDescription = parsed.searchParams.get("error_description");
+
+    console.log("[Supabase] exchangeCodeForSessionFromUrl", {
+      hasCode: Boolean(code),
+      hasError: Boolean(errorDescription),
+    });
+
+    if (errorDescription) {
+      return { error: new Error(errorDescription) };
+    }
+
+    if (!code) {
+      return { error: new Error("Missing OAuth code") };
+    }
+
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error("[Supabase] exchangeCodeForSession error", error);
+      return { error };
+    }
+
+    console.log("[Supabase] exchangeCodeForSession success", {
+      hasSession: Boolean(data?.session),
+      hasUser: Boolean(data?.user),
+    });
+
+    return { data };
+  } catch (error) {
+    console.error("[Supabase] exchangeCodeForSessionFromUrl parse error", error);
+    return { error };
+  }
+}

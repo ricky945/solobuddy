@@ -37,6 +37,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="route-navigation" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false, presentation: "card" }} />
     </Stack>
   );
 }
