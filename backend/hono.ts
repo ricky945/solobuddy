@@ -67,6 +67,7 @@ const attachTrpcHandler = (mountPath: string) => {
   app.use(
     `${mountPath}/*`,
     trpcServer({
+      endpoint: mountPath,
       router: appRouter,
       createContext,
       onError({ error, path }) {
