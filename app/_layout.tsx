@@ -9,7 +9,6 @@ import "@/lib/supabase";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { ToursProvider, useTours } from "@/contexts/ToursContext";
-import { trpc, trpcClient } from "@/lib/trpc";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -80,17 +79,15 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <trpc.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <UserProvider>
-                <ToursProvider>
-                  <AppContent />
-                </ToursProvider>
-              </UserProvider>
-            </GestureHandlerRootView>
-          </QueryClientProvider>
-        </trpc.Provider>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <UserProvider>
+              <ToursProvider>
+                <AppContent />
+              </ToursProvider>
+            </UserProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );
