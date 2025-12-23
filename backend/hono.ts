@@ -46,32 +46,42 @@ app.get("/health", (c) => {
   });
 });
 
-app.use("/api/trpc/*", async (c, next) => {
-  const startTime = Date.now();
-  const path = new URL(c.req.url).pathname;
-  console.log(`[Hono] ${c.req.method} ${path}`);
-  try {
-    await next();
-    const duration = Date.now() - startTime;
-    console.log(`[Hono] ✓ ${path} completed in ${duration}ms`);
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`[Hono] ✗ ${path} failed after ${duration}ms:`, error);
-    throw error;
-  }
-});
+const attachTrpcLogging = (mountPath: string) => {
+  app.use(`${mountPath}/*`, async (c, next) => {
+    const startTime = Date.now();
+    const path = new URL(c.req.url).pathname;
+    console.log(`[Hono] ${c.req.method} ${path}`);
+    try {
+      await next();
+      const duration = Date.now() - startTime;
+      console.log(`[Hono] ✓ ${path} completed in ${duration}ms`);
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[Hono] ✗ ${path} failed after ${duration}ms:`, error);
+      throw error;
+    }
+  });
+};
 
-app.use(
-  "/api/trpc/*",
-  trpcServer({
-    router: appRouter,
-    createContext,
-    onError({ error, path }) {
-      console.error(`[tRPC] Error on ${path}:`, error);
-      console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
-    },
-  })
-);
+const attachTrpcHandler = (mountPath: string) => {
+  app.use(
+    `${mountPath}/*`,
+    trpcServer({
+      router: appRouter,
+      createContext,
+      onError({ error, path }) {
+        console.error(`[tRPC] Error on ${path}:`, error);
+        console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
+      },
+    })
+  );
+};
+
+attachTrpcLogging("/api/trpc");
+attachTrpcHandler("/api/trpc");
+
+attachTrpcLogging("/trpc");
+attachTrpcHandler("/trpc");
 
 app.onError((err, c) => {
   console.error("[Hono] Error:", err);
