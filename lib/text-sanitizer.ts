@@ -36,9 +36,10 @@ export function sanitizeTextForTTS(text: string): string {
 }
 
 type SplitChunksOptions = {
+  minChars?: number;
+  maxChars?: number;
   minWords?: number;
   maxWords?: number;
-  maxChars?: number;
 };
 
 function countWords(text: string): number {
@@ -72,15 +73,19 @@ function splitLongSentenceByWords(sentence: string, maxChars: number): string[] 
   return out;
 }
 
-export function splitIntoChunks(text: string, maxCharsOrOptions: number | SplitChunksOptions = 1200): string[] {
+export function splitIntoChunks(
+  text: string,
+  maxCharsOrOptions: number | SplitChunksOptions = { minChars: 200, maxChars: 300 },
+): string[] {
   const sanitized = sanitizeTextForTTS(text);
 
   const options: SplitChunksOptions =
     typeof maxCharsOrOptions === "number" ? { maxChars: maxCharsOrOptions } : maxCharsOrOptions;
 
-  const minWords = options.minWords ?? 200;
-  const maxWords = options.maxWords ?? 300;
-  const maxChars = options.maxChars ?? 1200;
+  const minChars = options.minChars ?? 200;
+  const maxChars = options.maxChars ?? 300;
+  const minWords = options.minWords;
+  const maxWords = options.maxWords;
 
   if (!sanitized) return [];
 
@@ -108,14 +113,20 @@ export function splitIntoChunks(text: string, maxCharsOrOptions: number | SplitC
       const candidate = currentChunk ? `${currentChunk} ${part}` : part;
       const candidateWords = countWords(candidate);
 
-      if (candidate.length <= maxChars && candidateWords <= maxWords) {
+      const withinCharLimit = candidate.length <= maxChars;
+      const withinWordLimit = typeof maxWords === "number" ? candidateWords <= maxWords : true;
+
+      if (withinCharLimit && withinWordLimit) {
         currentChunk = candidate;
         continue;
       }
 
       const currentWords = countWords(currentChunk);
 
-      if (currentChunk && (currentWords >= minWords || currentChunk.length >= Math.floor(maxChars * 0.75))) {
+      const meetsMinChars = currentChunk.length >= minChars;
+      const meetsMinWords = typeof minWords === "number" ? currentWords >= minWords : true;
+
+      if (currentChunk && (meetsMinChars || meetsMinWords)) {
         pushCurrent();
         currentChunk = part;
         continue;
@@ -135,6 +146,17 @@ export function splitIntoChunks(text: string, maxCharsOrOptions: number | SplitC
   if (currentChunk) pushCurrent();
 
   if (chunks.length === 0 && sanitized.length > 0) return [sanitized.substring(0, maxChars)];
+
+  if (chunks.length > 0) {
+    const last = chunks[chunks.length - 1];
+    if (last && last.length < Math.floor(minChars * 0.5) && chunks.length > 1) {
+      const prev = chunks[chunks.length - 2];
+      if (prev && prev.length + 1 + last.length <= maxChars + 40) {
+        chunks[chunks.length - 2] = `${prev} ${last}`.trim();
+        chunks.pop();
+      }
+    }
+  }
 
   return chunks;
 }

@@ -1077,7 +1077,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       try {
         console.log("[Tour Generation] Generating TTS audio...");
         
-        const chunks = splitIntoChunks(audioScript, { minWords: 200, maxWords: 300, maxChars: 1200 });
+        const chunks = splitIntoChunks(audioScript, { minChars: 200, maxChars: 300 });
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
         
         const audioBlobs: string[] = [];
