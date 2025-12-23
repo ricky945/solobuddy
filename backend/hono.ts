@@ -29,7 +29,7 @@ app.get("/health", (c) => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     routes: {
-      trpc: "/api/trpc",
+      trpc: "/api/trpc (external) -> /trpc (backend internal)",
       available: true,
       endpoints: [
         "tts.generate",
@@ -46,7 +46,7 @@ app.get("/health", (c) => {
   });
 });
 
-app.use("/api/trpc/*", async (c, next) => {
+app.use("/trpc/*", async (c, next) => {
   const startTime = Date.now();
   const path = new URL(c.req.url).pathname;
   console.log(`[Hono] ${c.req.method} ${path}`);
@@ -62,7 +62,7 @@ app.use("/api/trpc/*", async (c, next) => {
 });
 
 app.use(
-  "/api/trpc/*",
+  "/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,

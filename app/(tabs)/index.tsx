@@ -50,7 +50,7 @@ import { Topic, AudioLength, TransportMethod, AudioGuide, SubscriptionTier } fro
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
-import { splitIntoChunks } from "@/lib/text-sanitizer";
+
 import { trpc } from "@/lib/trpc";
 
 const iconMap = {
@@ -89,35 +89,38 @@ export default function ExploreScreen() {
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
   const generateTTSMutation = trpc.tts.generate.useMutation();
-  const [connectionStatus, setConnectionStatus] = useState<string>('checking');
-  
+  const [connectionStatus, setConnectionStatus] = useState<string>("checking");
+
   useEffect(() => {
-    checkBackendConnection();
+    void pingBackend();
   }, []);
-  
-  const checkBackendConnection = async () => {
+
+  const pingBackend = async (): Promise<boolean> => {
     try {
       const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
       if (!baseUrl) {
-        setConnectionStatus('error');
-        return;
+        setConnectionStatus("error");
+        return false;
       }
-      
+
       const response = await fetch(`${baseUrl}/api/health`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
       });
-      
+
       if (response.ok) {
-        setConnectionStatus('connected');
-        console.log('[Connection Check] Backend is reachable');
-      } else {
-        setConnectionStatus('error');
-        console.error('[Connection Check] Backend returned error:', response.status);
+        setConnectionStatus("connected");
+        console.log("[Connection Check] Backend is reachable");
+        return true;
       }
+
+      setConnectionStatus("error");
+      console.error("[Connection Check] Backend returned error:", response.status);
+      return false;
     } catch (error) {
-      setConnectionStatus('error');
-      console.error('[Connection Check] Failed to reach backend:', error);
+      setConnectionStatus("error");
+      console.error("[Connection Check] Failed to reach backend:", error);
+      return false;
     }
   };
   
@@ -709,6 +712,51 @@ For ${location}, return topics as JSON array:`;
     ? location.trim() !== "" && selectedLandmarkTopics.length > 0
     : location.trim() !== "" && selectedTopics.length > 0;
 
+  const splitTextIntoChunks = (text: string, maxChunkSize: number): string[] => {
+    const clean = text.replace(/\s+/g, " ").trim();
+    if (!clean) return [];
+
+    const chunks: string[] = [];
+    let current = "";
+
+    const pushCurrent = () => {
+      const trimmed = current.trim();
+      if (trimmed) chunks.push(trimmed);
+      current = "";
+    };
+
+    const parts = clean.split(/(?<=[.!?])\s+/);
+    for (const part of parts) {
+      const sentence = part.trim();
+      if (!sentence) continue;
+
+      if (sentence.length > maxChunkSize) {
+        if (current) pushCurrent();
+        for (let i = 0; i < sentence.length; i += maxChunkSize) {
+          const slice = sentence.slice(i, i + maxChunkSize).trim();
+          if (slice) chunks.push(slice);
+        }
+        continue;
+      }
+
+      if (!current) {
+        current = sentence;
+        continue;
+      }
+
+      if ((current.length + 1 + sentence.length) <= maxChunkSize) {
+        current = `${current} ${sentence}`;
+      } else {
+        pushCurrent();
+        current = sentence;
+      }
+    }
+
+    if (current) pushCurrent();
+
+    return chunks;
+  };
+
   const checkNetworkConnectivity = async (): Promise<boolean> => {
     try {
       console.log("[Network Check] Testing connectivity...");
@@ -742,7 +790,7 @@ For ${location}, return topics as JSON array:`;
         'Cannot reach the server. Please check your internet connection and try again.',
         [
           { text: 'Retry', onPress: async () => {
-            await checkBackendConnection();
+            await pingBackend();
             setTimeout(() => handleGenerate(), 100);
           }},
           { text: 'Cancel', style: 'cancel' }
@@ -1016,9 +1064,9 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           console.log(`[TTS] Generating audio chunk, text length: ${text.length}, attempt: ${retryCount + 1}`);
           
           if (retryCount === 0) {
-            await checkBackendConnection();
-            if (connectionStatus === 'error') {
-              throw new Error('Cannot reach backend server. Please check your internet connection.');
+            const ok = await pingBackend();
+            if (!ok) {
+              throw new Error("Cannot reach backend server. Please check your internet connection.");
             }
           }
           
@@ -1068,7 +1116,7 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       try {
         console.log("[Tour Generation] Generating TTS audio...");
         
-        const chunks = splitIntoChunks(audioScript, 1500);
+        const chunks = splitTextIntoChunks(audioScript, 1500);
         console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
         
         const audioBlobs: string[] = [];
@@ -1101,16 +1149,45 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
         
         console.log("[Tour Generation] All chunks generated, creating audio file...");
         
-        const combinedBase64 = audioBlobs.join('');
-        
-        if (Platform.OS === 'web') {
-          audioUrl = `data:audio/mpeg;base64,${combinedBase64}`;
-          console.log("[Tour Generation] Web audio URL created");
+        const base64ToBytes = (b64: string): Uint8Array => {
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return bytes;
+        };
+
+        const totalBytes = audioBlobs.reduce((sum, b64) => {
+          try {
+            const padded = b64.replace(/\s+/g, "").replace(/=+$/g, "");
+            const len = Math.floor((padded.length * 3) / 4);
+            return sum + len;
+          } catch {
+            return sum;
+          }
+        }, 0);
+
+        console.log("[Tour Generation] Estimated combined audio size:", Math.round(totalBytes / 1024), "KB");
+
+        const combinedBytes: number[] = [];
+        for (const b64 of audioBlobs) {
+          const cleanB64 = b64.replace(/\s+/g, "");
+          const bytes = base64ToBytes(cleanB64);
+          for (let i = 0; i < bytes.length; i++) combinedBytes.push(bytes[i]);
+        }
+
+        const finalBytes = Uint8Array.from(combinedBytes);
+
+        if (Platform.OS === "web") {
+          const blob = new Blob([finalBytes], { type: "audio/mpeg" });
+          const url = URL.createObjectURL(blob);
+          audioUrl = url;
+          console.log("[Tour Generation] Web audio blob URL created");
         } else {
           const file = new File(Paths.cache, `tour_${tourId}.mp3`);
-          const bytes = Uint8Array.from(atob(combinedBase64), c => c.charCodeAt(0));
           file.create({ overwrite: true });
-          file.write(bytes);
+          file.write(finalBytes);
           audioUrl = file.uri;
           console.log("[Tour Generation] Native audio file saved:", file.uri);
         }
