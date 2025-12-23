@@ -9,6 +9,7 @@ import {
   TextInput,
   Image,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
@@ -79,14 +80,30 @@ const getCountryFlag = (country: string): string => {
 };
 
 export default function AccountScreen() {
-  const { user, updateProfile } = useUser();
+  const {
+    user,
+    updateProfile,
+    isAuthLoading,
+    isSignedIn,
+    authEmail,
+    signInWithPassword,
+    signUpWithPassword,
+    signOut,
+    isSigningIn,
+    isSigningUp,
+    isSigningOut,
+  } = useUser();
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(user.profile?.name || "");
   const [editBio, setEditBio] = useState(user.profile?.bio || "");
   const [editCurrentCity, setEditCurrentCity] = useState(user.profile?.currentCity || "");
-  const [editCountriesVisited, setEditCountriesVisited] = useState(
-    user.profile?.countriesVisited?.join(", ") || ""
-  );
+  const [editCountriesVisited, setEditCountriesVisited] = useState(user.profile?.countriesVisited?.join(", ") || "");
+
+  const [authEmailInput, setAuthEmailInput] = useState<string>(authEmail ?? "");
+  const [authPasswordInput, setAuthPasswordInput] = useState<string>("");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   const hasProfile = user.profile && user.profile.name;
 
@@ -130,14 +147,23 @@ export default function AccountScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Logout", style: "destructive" },
-      ]
-    );
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setAuthMessage(null);
+            await signOut();
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : "Failed to log out";
+            console.error("[Account] signOut error", e);
+            Alert.alert("Logout failed", msg);
+          }
+        },
+      },
+    ]);
   };
 
   const handleDeleteAccount = () => {
@@ -324,11 +350,158 @@ export default function AccountScreen() {
           <Text style={styles.pageTitle}>Account</Text>
 
           <View style={styles.authCard} testID="account-auth-card">
-            <Text style={styles.authTitle}>Sign in</Text>
-            <Text style={styles.authSubtitle}>Sync your profile across devices and keep your tours safe.</Text>
-            <View style={styles.authActions}>
-              <AuthAppleButton />
+            <View style={styles.authHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.authTitle}>{isSignedIn ? "Signed in" : authMode === "signin" ? "Sign in" : "Create account"}</Text>
+                <Text style={styles.authSubtitle}>
+                  {isSignedIn
+                    ? "Your account is connected."
+                    : "Sync your profile across devices and keep your tours safe."}
+                </Text>
+              </View>
+              {!isSignedIn ? (
+                <View style={styles.authModePills} testID="auth-mode-pills">
+                  <TouchableOpacity
+                    style={[styles.pill, authMode === "signin" ? styles.pillActive : null]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setAuthMode("signin");
+                      setAuthMessage(null);
+                    }}
+                    testID="auth-mode-signin"
+                  >
+                    <Text style={[styles.pillText, authMode === "signin" ? styles.pillTextActive : null]}>Sign in</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.pill, authMode === "signup" ? styles.pillActive : null]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setAuthMode("signup");
+                      setAuthMessage(null);
+                    }}
+                    testID="auth-mode-signup"
+                  >
+                    <Text style={[styles.pillText, authMode === "signup" ? styles.pillTextActive : null]}>Sign up</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
+
+            {isAuthLoading ? (
+              <View style={styles.authLoadingRow} testID="auth-loading">
+                <ActivityIndicator color={Colors.light.primary} />
+                <Text style={styles.authLoadingText}>Checking session…</Text>
+              </View>
+            ) : null}
+
+            {isSignedIn ? (
+              <View style={styles.signedInRow} testID="auth-signed-in-row">
+                <View style={styles.signedInBadge}>
+                  <Text style={styles.signedInBadgeText}>Connected</Text>
+                </View>
+                <Text style={styles.signedInEmail} numberOfLines={1}>
+                  {authEmail ?? ""}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, isSigningOut ? styles.secondaryButtonDisabled : null]}
+                  activeOpacity={0.85}
+                  onPress={handleLogout}
+                  disabled={isSigningOut}
+                  testID="auth-signout"
+                >
+                  <Text style={styles.secondaryButtonText}>{isSigningOut ? "Signing out…" : "Sign out"}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.emailAuthWrap} testID="auth-email-form">
+                <View style={styles.inputGroup}>
+                  <Text style={styles.formLabel}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={authEmailInput}
+                    onChangeText={setAuthEmailInput}
+                    placeholder="you@example.com"
+                    placeholderTextColor={Colors.light.textSecondary}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoCorrect={false}
+                    testID="auth-email-input"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.formLabel}>Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={authPasswordInput}
+                    onChangeText={setAuthPasswordInput}
+                    placeholder="••••••••"
+                    placeholderTextColor={Colors.light.textSecondary}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType={authMode === "signup" ? "newPassword" : "password"}
+                    testID="auth-password-input"
+                  />
+                  <Text style={styles.formHint}>{authMode === "signup" ? "Use 8+ characters." : ""}</Text>
+                </View>
+
+                {authMessage ? <Text style={styles.authMessage}>{authMessage}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.primaryAuthButton, (isSigningIn || isSigningUp) ? styles.primaryAuthButtonDisabled : null]}
+                  activeOpacity={0.85}
+                  disabled={isSigningIn || isSigningUp}
+                  onPress={async () => {
+                    try {
+                      setAuthMessage(null);
+                      const email = authEmailInput.trim().toLowerCase();
+                      const password = authPasswordInput;
+
+                      if (!email || !email.includes("@")) {
+                        Alert.alert("Invalid email", "Please enter a valid email address.");
+                        return;
+                      }
+                      if (!password || password.length < 6) {
+                        Alert.alert("Invalid password", "Password must be at least 6 characters.");
+                        return;
+                      }
+
+                      if (authMode === "signin") {
+                        await signInWithPassword({ email, password });
+                        setAuthPasswordInput("");
+                        setAuthMessage("Signed in successfully.");
+                      } else {
+                        await signUpWithPassword({ email, password });
+                        setAuthPasswordInput("");
+                        setAuthMessage("Account created. Check your email if confirmation is required.");
+                      }
+                    } catch (e: unknown) {
+                      const msg = e instanceof Error ? e.message : "Authentication failed";
+                      console.error("[Account] email auth error", e);
+                      setAuthMessage(msg);
+                      Alert.alert("Authentication failed", msg);
+                    }
+                  }}
+                  testID="auth-email-submit"
+                >
+                  <Text style={styles.primaryAuthButtonText}>
+                    {authMode === "signin" ? (isSigningIn ? "Signing in…" : "Sign in") : isSigningUp ? "Creating…" : "Create account"}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.authDividerRow}>
+                  <View style={styles.authDividerLine} />
+                  <Text style={styles.authDividerText}>or</Text>
+                  <View style={styles.authDividerLine} />
+                </View>
+
+                <View style={styles.authActions}>
+                  <AuthAppleButton />
+                </View>
+              </View>
+            )}
           </View>
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
@@ -842,6 +1015,149 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: Colors.light.textSecondary,
     marginBottom: 14,
+  },
+  authHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10,
+  },
+  authModePills: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderRadius: 999,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  pill: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  pillActive: {
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.light.textSecondary,
+  },
+  pillTextActive: {
+    color: Colors.light.text,
+  },
+  authLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: 12,
+  },
+  authLoadingText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+  },
+  emailAuthWrap: {
+    gap: 12,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  authMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.light.text,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: `${Colors.light.primary}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.light.primary}25`,
+  },
+  primaryAuthButton: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryAuthButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryAuthButtonText: {
+    color: Colors.light.background,
+    fontSize: 15,
+    fontWeight: "800" as const,
+    letterSpacing: 0.2,
+  },
+  authDividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  authDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.light.border,
+  },
+  authDividerText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.light.textSecondary,
+  },
+  signedInRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  signedInBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#DCFCE7",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  signedInBadgeText: {
+    fontSize: 12,
+    fontWeight: "800" as const,
+    color: "#15803D",
+  },
+  signedInEmail: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+  },
+  secondaryButton: {
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  secondaryButtonText: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
   },
   authActions: {
     flexDirection: "row",

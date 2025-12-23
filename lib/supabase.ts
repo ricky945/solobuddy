@@ -1,14 +1,45 @@
 import "expo-sqlite/localStorage/install";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
+import { Platform } from "react-native";
+
+type SupabaseStorage = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
+};
 
 const supabaseUrl = "https://blcnymocctrbnqljzzco.supabase.co";
 const supabasePublishableKey = "sb_publishable__LQ9mmQtupMO4_6hoT-Dbg_UdumNnRz";
 
-const storage: Storage = typeof localStorage !== "undefined" ? localStorage : (undefined as unknown as Storage);
+const webStorage: SupabaseStorage | null =
+  typeof localStorage !== "undefined"
+    ? {
+        getItem: async (key: string) => localStorage.getItem(key),
+        setItem: async (key: string, value: string) => {
+          localStorage.setItem(key, value);
+        },
+        removeItem: async (key: string) => {
+          localStorage.removeItem(key);
+        },
+      }
+    : null;
+
+const nativeStorage: SupabaseStorage = {
+  getItem: async (key: string) => AsyncStorage.getItem(key),
+  setItem: async (key: string, value: string) => {
+    await AsyncStorage.setItem(key, value);
+  },
+  removeItem: async (key: string) => {
+    await AsyncStorage.removeItem(key);
+  },
+};
+
+export const supabaseAuthStorage: SupabaseStorage = Platform.OS === "web" ? (webStorage ?? nativeStorage) : nativeStorage;
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
-    storage,
+    storage: supabaseAuthStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
