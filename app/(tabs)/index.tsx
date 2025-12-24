@@ -51,7 +51,6 @@ import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
 
-import { trpc } from "@/lib/trpc";
 import { splitIntoChunks, sanitizeTextForTTS } from "@/lib/text-sanitizer";
 
 const iconMap = {
@@ -89,7 +88,6 @@ export default function ExploreScreen() {
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isProcessingSubscription, setIsProcessingSubscription] = useState<boolean>(false);
   
-  const generateTTSMutation = trpc.tts.generate.useMutation();
   const [connectionStatus, setConnectionStatus] = useState<string>("checking");
 
   useEffect(() => {
@@ -986,135 +984,125 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
       console.log("[Tour Generation] Script length:", audioScript.length, "characters");
       console.log("[Tour Generation] Script preview:", audioScript.substring(0, 200) + "...");
 
-      let audioUrl: string = '';
-      
-      const generateAudioChunk = async (text: string, retryCount = 0): Promise<string> => {
+      let audioUrl: string = "";
+
+      const OPENAI_TTS_MODEL = "tts-1" as const;
+      const OPENAI_TTS_VOICE = "alloy" as const;
+      const OPENAI_TTS_SPEED = 1.0 as const;
+
+      const concatUint8Arrays = (parts: Uint8Array[]): Uint8Array => {
+        const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
+        const out = new Uint8Array(total);
+        let offset = 0;
+        for (const p of parts) {
+          out.set(p, offset);
+          offset += p.byteLength;
+        }
+        return out;
+      };
+
+      const generateTTSBuffer = async (text: string, attempt = 0): Promise<Uint8Array> => {
+        const apiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
+        if (!apiKey) {
+          throw new Error("OpenAI API key not configured");
+        }
+
+        const sanitized = sanitizeTextForTTS(text);
+        if (!sanitized || sanitized.length < 10) {
+          throw new Error("Text too short or invalid after sanitization");
+        }
+
+        console.log(`[TTS] Requesting OpenAI audio (${sanitized.length} chars), attempt ${attempt + 1}`);
+
+        const controller = new AbortController();
+        const timeoutMs = 90000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
-          console.log(`[TTS] Generating audio chunk, text length: ${text.length}, attempt: ${retryCount + 1}`);
-          
-          if (retryCount === 0) {
-            const ok = await pingBackend();
-            if (!ok) {
-              throw new Error("Cannot reach backend server. Please check your internet connection.");
-            }
-          }
-          
-          const sanitized = sanitizeTextForTTS(text);
-          console.log(`[TTS] Text length after sanitization: ${sanitized.length}`);
-          
-          const result = await generateTTSMutation.mutateAsync({
-            text: sanitized,
-            voice: 'alloy',
-            speed: 1.0,
+          const resp = await fetch("https://api.openai.com/v1/audio/speech", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: OPENAI_TTS_MODEL,
+              input: sanitized,
+              voice: OPENAI_TTS_VOICE,
+              speed: OPENAI_TTS_SPEED,
+            }),
+            signal: controller.signal,
           });
-          
-          if (!result.success || !result.audioData) {
-            throw new Error('Failed to generate audio');
+
+          console.log("[TTS] OpenAI status:", resp.status);
+
+          if (!resp.ok) {
+            let msg = "Unknown error";
+            try {
+              const ct = resp.headers.get("content-type") || "";
+              if (ct.includes("application/json")) {
+                const j = await resp.json();
+                msg = j?.error?.message ? String(j.error.message) : JSON.stringify(j);
+              } else {
+                msg = await resp.text();
+              }
+            } catch {}
+
+            if (resp.status === 401) throw new Error("Invalid API key");
+            if (resp.status === 429) throw new Error("Rate limit exceeded");
+            throw new Error(`TTS API error (${resp.status}): ${msg}`);
           }
-          
-          console.log(`[TTS] Chunk generated successfully`);
-          return result.audioData;
-        } catch (error: any) {
-          console.error(`[TTS] Error generating chunk (attempt ${retryCount + 1}):`, error);
-          
-          const errorMsg = error?.message || String(error);
-          const isNetworkError = errorMsg.toLowerCase().includes('network') || 
-                                errorMsg.toLowerCase().includes('fetch') || 
-                                errorMsg.toLowerCase().includes('connection') ||
-                                errorMsg.toLowerCase().includes('failed to reach');
-          
-          const isTimeout = errorMsg.toLowerCase().includes('timeout') ||
-                           errorMsg.toLowerCase().includes('aborted');
-          
-          if ((isNetworkError || isTimeout) && retryCount < 3) {
-            const delay = Math.min(3000 * Math.pow(2, retryCount), 10000);
-            console.log(`[TTS] ${isTimeout ? 'Timeout' : 'Network error'} detected, retrying in ${delay / 1000} seconds...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return generateAudioChunk(text, retryCount + 1);
+
+          const ab = await resp.arrayBuffer();
+          console.log("[TTS] Received audio bytes:", ab.byteLength);
+          return new Uint8Array(ab);
+        } catch (e: any) {
+          const msg = String(e?.message || e || "").toLowerCase();
+          const isTimeout = e?.name === "AbortError" || msg.includes("aborted") || msg.includes("timeout");
+          const isNetwork = msg.includes("network") || msg.includes("fetch") || msg.includes("failed");
+
+          if ((isTimeout || isNetwork) && attempt < 2) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+            console.log(`[TTS] Retrying after ${delay}ms (timeout/network)`);
+            await new Promise((r) => setTimeout(r, delay));
+            return generateTTSBuffer(text, attempt + 1);
           }
-          
-          if (isNetworkError) {
-            throw new Error('Network connection lost. Please check your internet connection and try again.');
-          }
-          
-          if (isTimeout) {
-            throw new Error('Request timed out. The server may be busy. Please try again in a moment.');
-          }
-          
-          throw error;
+
+          throw e;
+        } finally {
+          clearTimeout(timeoutId);
         }
       };
-      
+
       try {
-        console.log("[Tour Generation] Generating TTS audio...");
-        
-        const chunks = splitIntoChunks(audioScript, { minChars: 200, maxChars: 300 });
-        console.log(`[Tour Generation] Split script into ${chunks.length} chunks`);
-        
-        const audioBlobs: string[] = [];
-        
+        console.log("[Tour Generation] Generating TTS audio (client-direct)...");
+
+        const chunks = splitIntoChunks(audioScript, { minChars: 900, maxChars: 3800 });
+        console.log(`[Tour Generation] Split script into ${chunks.length} chunk(s)`);
+
+        const buffers: Uint8Array[] = [];
+
         for (let i = 0; i < chunks.length; i++) {
           if (!isMounted) {
             console.log("[Tour Generation] Component unmounted, stopping");
             return;
           }
-          
-          console.log(`[Tour Generation] Processing chunk ${i + 1}/${chunks.length}`);
-          
-          try {
-            const audioData = await generateAudioChunk(chunks[i]);
-            audioBlobs.push(audioData);
-            console.log(`[Tour Generation] Chunk ${i + 1}/${chunks.length} completed`);
-          } catch (chunkError: any) {
-            const errorMsg = chunkError?.message || String(chunkError);
-            console.error(`[Tour Generation] Chunk ${i + 1} failed:`, errorMsg);
-            
-            if (errorMsg.toLowerCase().includes('network')) {
-              throw new Error(`Network connection lost during audio generation. Please check your internet connection and try again.`);
-            } else if (errorMsg.toLowerCase().includes('timeout')) {
-              throw new Error(`Request timed out. The server may be overloaded. Please try again in a moment.`);
-            } else {
-              throw new Error(`Audio generation failed at chunk ${i + 1}: ${errorMsg}`);
-            }
-          }
-        }
-        
-        console.log("[Tour Generation] All chunks generated, creating audio file...");
-        
-        const base64ToBytes = (b64: string): Uint8Array => {
-          const binary = atob(b64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          return bytes;
-        };
 
-        const totalBytes = audioBlobs.reduce((sum, b64) => {
-          try {
-            const padded = b64.replace(/\s+/g, "").replace(/=+$/g, "");
-            const len = Math.floor((padded.length * 3) / 4);
-            return sum + len;
-          } catch {
-            return sum;
-          }
-        }, 0);
-
-        console.log("[Tour Generation] Estimated combined audio size:", Math.round(totalBytes / 1024), "KB");
-
-        const combinedBytes: number[] = [];
-        for (const b64 of audioBlobs) {
-          const cleanB64 = b64.replace(/\s+/g, "");
-          const bytes = base64ToBytes(cleanB64);
-          for (let i = 0; i < bytes.length; i++) combinedBytes.push(bytes[i]);
+          console.log(`[Tour Generation] TTS chunk ${i + 1}/${chunks.length}`);
+          const bytes = await generateTTSBuffer(chunks[i]);
+          buffers.push(bytes);
         }
 
-        const finalBytes = Uint8Array.from(combinedBytes);
+        const finalBytes = concatUint8Arrays(buffers);
+        console.log("[Tour Generation] Final audio bytes:", finalBytes.byteLength);
 
         if (Platform.OS === "web") {
-          const blob = new Blob([finalBytes], { type: "audio/mpeg" });
-          const url = URL.createObjectURL(blob);
-          audioUrl = url;
+          const arrayBuffer = finalBytes.buffer.slice(
+            finalBytes.byteOffset,
+            finalBytes.byteOffset + finalBytes.byteLength
+          );
+          const blob = new Blob([arrayBuffer as ArrayBuffer], { type: "audio/mpeg" });
+          audioUrl = URL.createObjectURL(blob);
           console.log("[Tour Generation] Web audio blob URL created");
         } else {
           const file = new File(Paths.cache, `tour_${tourId}.mp3`);
@@ -1123,34 +1111,30 @@ ${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real land
           audioUrl = file.uri;
           console.log("[Tour Generation] Native audio file saved:", file.uri);
         }
-        
+
         console.log("[Tour Generation] Audio generation complete");
       } catch (ttsError: any) {
         console.error("[Tour Generation] TTS failed:", ttsError?.message || ttsError);
-        
+
         if (!isMounted) return;
-        
+
+        const msg = String(ttsError?.message || ttsError || "").toLowerCase();
         let errorMessage = "Unable to generate audio. Please try again.";
-        if (ttsError?.message) {
-          const msg = ttsError.message.toLowerCase();
-          if (msg.includes('api key')) {
-            errorMessage = "API configuration error. Please contact support.";
-          } else if (msg.includes('rate limit') || msg.includes('429')) {
-            errorMessage = "Too many requests. Please wait a moment and try again.";
-          } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connection')) {
-            errorMessage = "Network connection error. Please check your internet connection and try again.";
-          } else if (msg.includes('timeout')) {
-            errorMessage = "Request timed out. Please try again with a shorter tour or better connection.";
-          } else if (msg.includes('chunk') || msg.includes('audio generation failed')) {
-            errorMessage = ttsError.message;
-          }
+        if (msg.includes("api key") || msg.includes("invalid api")) {
+          errorMessage = "API configuration error. Please contact support.";
+        } else if (msg.includes("rate limit") || msg.includes("429")) {
+          errorMessage = "Too many requests. Please wait a moment and try again.";
+        } else if (msg.includes("timeout") || msg.includes("aborted")) {
+          errorMessage = "Request timed out. Please try again.";
+        } else if (msg.includes("network") || msg.includes("fetch")) {
+          errorMessage = "Network connection error. Please check your connection and try again.";
+        } else if (ttsError?.message) {
+          errorMessage = ttsError.message;
         }
-        
-        Alert.alert(
-          "Audio Generation Failed",
-          errorMessage,
-          [{ text: "OK", onPress: resetFlow }]
-        );
+
+        Alert.alert("Audio Generation Failed", errorMessage, [
+          { text: "OK", onPress: resetFlow },
+        ]);
         resetFlow();
         return;
       }
