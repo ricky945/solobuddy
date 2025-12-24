@@ -8,8 +8,10 @@ import {
   Animated,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from "react-native";
 import { Audio } from "expo-av";
+import { File, Paths } from "expo-file-system";
 import {
   Play,
   Pause,
@@ -31,6 +33,10 @@ interface AudioPlayerProps {
 }
 
 type LoadState = "loading" | "ready" | "error";
+
+type CachedAudioResult =
+  | { uri: string; fromCache: boolean; local: boolean }
+  | { uri: string; fromCache: false; local: false };
 
 function formatTime(milliseconds: number | null | undefined) {
   const ms = typeof milliseconds === "number" ? milliseconds : NaN;
@@ -54,6 +60,72 @@ function buildUnsplashArtworkUrl(title: string, location: string) {
   return `https://source.unsplash.com/1200x1200/?${q}`;
 }
 
+function hashStringToId(input: string) {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33) ^ input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+async function resolvePlayableAudioUri(audioUrl: string): Promise<CachedAudioResult> {
+  if (!audioUrl) {
+    return { uri: audioUrl, fromCache: false, local: false };
+  }
+
+  if (Platform.OS === "web") {
+    return { uri: audioUrl, fromCache: false, local: false };
+  }
+
+  const isRemote = /^https?:\/\//i.test(audioUrl);
+  if (!isRemote) {
+    return { uri: audioUrl, fromCache: true, local: true };
+  }
+
+  try {
+    const fileName = `audio_${hashStringToId(audioUrl)}.mp3`;
+    const file = new File(Paths.cache, `audio-guides/${fileName}`);
+
+    try {
+      const exists = await (file as any).exists?.();
+      if (exists) {
+        return { uri: file.uri, fromCache: true, local: true };
+      }
+    } catch {
+    }
+
+    try {
+      await file.create({ overwrite: true });
+    } catch {
+      try {
+        const dir = new File(Paths.cache, "audio-guides");
+        await dir.create({ intermediates: true });
+        await file.create({ overwrite: true });
+      } catch (e) {
+        console.log("[AudioPlayer] cache directory create failed", e);
+      }
+    }
+
+    console.log("[AudioPlayer] Downloading audio to cache for reliable playback", {
+      audioUrl,
+      uri: file.uri,
+    });
+
+    const resp = await fetch(audioUrl);
+    if (!resp.ok) {
+      throw new Error(`Download failed: ${resp.status}`);
+    }
+    const arrayBuffer = await resp.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    await (file as any).write(bytes);
+
+    return { uri: file.uri, fromCache: false, local: true };
+  } catch (e) {
+    console.log("[AudioPlayer] cache download failed; falling back to remote streaming", e);
+    return { uri: audioUrl, fromCache: false, local: false };
+  }
+}
+
 export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const isMountedRef = useRef<boolean>(true);
@@ -66,6 +138,8 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [showChapters, setShowChapters] = useState<boolean>(false);
+  const [resolvedAudioUri, setResolvedAudioUri] = useState<string>(guide.audioUrl);
+  const [isCached, setIsCached] = useState<boolean>(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -92,10 +166,35 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [guide.location, guide.thumbnailUrl, guide.title]);
 
   useEffect(() => {
+    let cancelled = false;
+    const resolve = async () => {
+      try {
+        const result = await resolvePlayableAudioUri(guide.audioUrl);
+        if (cancelled) return;
+        setResolvedAudioUri(result.uri);
+        setIsCached(!!result.local);
+        console.log("[AudioPlayer] Resolved audio URI", result);
+      } catch (e) {
+        console.log("[AudioPlayer] resolvePlayableAudioUri error", e);
+        if (!cancelled) {
+          setResolvedAudioUri(guide.audioUrl);
+          setIsCached(false);
+        }
+      }
+    };
+
+    void resolve();
+    return () => {
+      cancelled = true;
+    };
+  }, [guide.audioUrl]);
+
+  useEffect(() => {
     isMountedRef.current = true;
 
     const setupAudio = async () => {
       try {
+        setLoadState("loading");
         console.log("[AudioPlayer] Setting audio mode");
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
@@ -106,9 +205,14 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           interruptionModeAndroid: 1,
         });
 
-        console.log("[AudioPlayer] Loading audio", { url: guide.audioUrl });
+        console.log("[AudioPlayer] Loading audio", {
+          originalUrl: guide.audioUrl,
+          resolvedAudioUri,
+          isCached,
+        });
+
         const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: guide.audioUrl },
+          { uri: resolvedAudioUri },
           { shouldPlay: false, progressUpdateIntervalMillis: 500 },
           (status: any) => {
             if (!isMountedRef.current) return;
@@ -117,13 +221,13 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               setPosition(nextPosition);
 
               const nextDurationCandidate: unknown =
-                typeof status.durationMillis === "number"
-                  ? status.durationMillis
-                  : typeof status.playableDurationMillis === "number"
-                    ? status.playableDurationMillis
-                    : null;
+                typeof status.durationMillis === "number" ? status.durationMillis : null;
 
-              if (typeof nextDurationCandidate === "number" && Number.isFinite(nextDurationCandidate) && nextDurationCandidate > 0) {
+              if (
+                typeof nextDurationCandidate === "number" &&
+                Number.isFinite(nextDurationCandidate) &&
+                nextDurationCandidate > 0
+              ) {
                 setDuration(nextDurationCandidate);
               }
 
@@ -132,6 +236,8 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                 setIsPlaying(false);
                 setPosition(0);
               }
+            } else if (status?.error) {
+              console.log("[AudioPlayer] Playback status error", status.error);
             }
           }
         );
@@ -151,14 +257,19 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
       const s = soundRef.current;
       soundRef.current = null;
       if (s) {
-        s.stopAsync()
+        s.getStatusAsync()
+          .then((st) => {
+            if (st.isLoaded) {
+              return s.stopAsync();
+            }
+          })
           .catch((e) => console.error("[AudioPlayer] stopAsync cleanup error", e))
           .finally(() => {
             s.unloadAsync().catch((e) => console.error("[AudioPlayer] unloadAsync cleanup error", e));
           });
       }
     };
-  }, [guide.audioUrl, guide.duration]);
+  }, [guide.audioUrl, isCached, resolvedAudioUri]);
 
   const togglePlayPause = useCallback(async () => {
     const s = soundRef.current;
