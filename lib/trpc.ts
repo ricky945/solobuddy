@@ -21,9 +21,12 @@ const getBaseUrl = () => {
       "EXPO_PUBLIC_RORK_API_BASE_URL is not set. Please contact support."
     );
   }
+
+  // Remove trailing slash if present to avoid double slashes
+  const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
   
-  console.log("[tRPC] Using backend URL:", url);
-  return url;
+  console.log("[tRPC] Using backend URL:", cleanUrl);
+  return cleanUrl;
 };
 
 const MAX_RETRIES = 3;

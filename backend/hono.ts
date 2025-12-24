@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { trpcServer } from "@hono/trpc-server";
 import { cors } from "hono/cors";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
 
@@ -52,18 +52,18 @@ app.use("/api/trpc/*", async (c, next) => {
 });
 
 // tRPC Handler
-app.use(
-  "/api/trpc/*",
-  trpcServer({
+app.all("/api/trpc/:path+", (c) => {
+  return fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req: c.req.raw,
     router: appRouter,
     createContext,
-    endpoint: "/api/trpc",
     onError({ error, path }) {
       console.error(`[tRPC] Error on ${path}:`, error);
       console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
     },
-  })
-);
+  });
+});
 
 app.onError((err, c) => {
   console.error("[Hono] Error:", err);
