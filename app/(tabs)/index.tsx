@@ -992,18 +992,53 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
 
       console.log("[Tour Generation] Calling AI...");
 
-      const response = await generateText({
-        messages: [
-          { role: "user", content: systemPrompt + "\n\n" + userMessage },
-        ],
-      });
+      let response: string | undefined;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        try {
+          console.log(`[Tour Generation] AI call attempt ${retryCount + 1}/${maxRetries}`);
+          
+          const controller = new AbortController();
+          timeoutId = setTimeout(() => controller.abort(), 60000);
+          
+          response = await generateText({
+            messages: [
+              { role: "user", content: systemPrompt + "\n\n" + userMessage },
+            ],
+          });
+          
+          clearTimeout(timeoutId);
+          console.log("[Tour Generation] AI response received successfully");
+          break;
+        } catch (aiError: any) {
+          if (timeoutId) clearTimeout(timeoutId);
+          console.error(`[Tour Generation] AI call attempt ${retryCount + 1} failed:`, aiError);
+          
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw new Error(
+              "Failed to generate tour content after multiple attempts. Please check your internet connection and try again. If you're on mobile, try switching between WiFi and cellular data."
+            );
+          }
+          
+          const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+          console.log(`[Tour Generation] Retrying after ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          
+          if (!isMounted) {
+            console.log("[Tour Generation] Component unmounted during retry");
+            return;
+          }
+        }
+      }
 
       if (!isMounted) {
         console.log("[Tour Generation] Component unmounted, aborting");
         return;
       }
-
-      console.log("[Tour Generation] AI response received");
 
       if (!response || response.trim().length === 0) {
         throw new Error("Empty response from AI");
