@@ -133,7 +133,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
   const [duration, setDuration] = useState<number | null>(
-    Number.isFinite(guide.duration) && guide.duration > 0 ? guide.duration * 1000 : null
+    typeof guide.duration === "number" && guide.duration > 0 ? guide.duration * 1000 : null
   );
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -495,18 +495,19 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                 nestedScrollEnabled
               >
                 {guide.chapters.map((chapter, index) => {
-                  const nextStart = guide.chapters?.[index + 1]?.timestamp;
-                  const inferredDurationSeconds =
-                    typeof nextStart === "number" && Number.isFinite(nextStart)
-                      ? Math.max(0, nextStart - chapter.timestamp)
-                      : typeof duration === "number" && Number.isFinite(duration)
-                        ? Math.max(0, Math.floor(duration / 1000) - chapter.timestamp)
-                        : null;
-
-                  const displayDurationSeconds =
-                    Number.isFinite(chapter.duration) && chapter.duration > 0
-                      ? chapter.duration
-                      : inferredDurationSeconds;
+                  const nextChapter = guide.chapters?.[index + 1];
+                  const nextTimestamp = nextChapter?.timestamp;
+                  const totalDurationSeconds = duration ? Math.floor(duration / 1000) : 0;
+                  
+                  let chapterDurationSeconds = 0;
+                  
+                  if (typeof chapter.duration === "number" && chapter.duration > 0) {
+                    chapterDurationSeconds = chapter.duration;
+                  } else if (typeof nextTimestamp === "number") {
+                    chapterDurationSeconds = Math.max(0, nextTimestamp - chapter.timestamp);
+                  } else if (totalDurationSeconds > 0) {
+                    chapterDurationSeconds = Math.max(0, totalDurationSeconds - chapter.timestamp);
+                  }
 
                   return (
                     <TouchableOpacity
@@ -524,7 +525,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                           Start {formatTime(chapter.timestamp * 1000)}
                         </Text>
                       </View>
-                      <Text style={styles.chapterTime}>{formatTime((displayDurationSeconds ?? 0) * 1000)}</Text>
+                      <Text style={styles.chapterTime}>{formatTime(chapterDurationSeconds * 1000)}</Text>
                     </TouchableOpacity>
                   );
                 })}
