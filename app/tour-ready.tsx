@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Dimensions,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, Sparkles, MapPin, Clock, ArrowRight } from "lucide-react-native";
@@ -29,23 +30,43 @@ export default function TourReadyScreen() {
   const tour = useMemo(() => getTourById(String(tourId ?? "")), [getTourById, tourId]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
+
+  const landmarks = useMemo<Landmark[]>(() => tour?.landmarks ?? [], [tour?.landmarks]);
+  const stopsCount = landmarks.length;
+
+  const itemAnims = useRef<Animated.Value[]>([]);
+  if (itemAnims.current.length !== landmarks.length) {
+    itemAnims.current = landmarks.map(() => new Animated.Value(0));
+  }
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 520,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        friction: 8,
-        tension: 40,
+        friction: 9,
+        tension: 46,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+
+    const items = itemAnims.current;
+    Animated.stagger(
+      90,
+      items.map((v) =>
+        Animated.timing(v, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, [fadeAnim, slideAnim, landmarks.length]);
 
   const onStart = useCallback(() => {
     console.log("[TourReady] Start tour", { tourId: String(tourId ?? "") });
@@ -54,9 +75,6 @@ export default function TourReadyScreen() {
       params: { tourId: String(tourId ?? "") },
     } as any);
   }, [router, tourId]);
-
-  const landmarks = useMemo<Landmark[]>(() => tour?.landmarks ?? [], [tour?.landmarks]);
-  const stopsCount = landmarks.length;
 
   return (
     <View style={styles.container} testID="tourReadyScreen">
@@ -116,35 +134,48 @@ export default function TourReadyScreen() {
           </View>
 
           <View style={styles.itinerarySection}>
-            <Text style={styles.sectionTitle}>Trip Itinerary</Text>
-            
+            <Text style={styles.sectionTitle}>Trip itinerary</Text>
+
             <View style={styles.timeline}>
               <View style={styles.timelineLine} />
-              
+
               {landmarks.map((lm, idx) => {
                 const imageUrl = getLandmarkImageUrl(lm.name, tour?.location);
+                const v = itemAnims.current[idx];
+                const translateY = v.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [12, 0],
+                });
+
                 return (
-                  <View key={lm.id} style={styles.timelineItem}>
+                  <Animated.View
+                    key={lm.id}
+                    style={[styles.timelineItem, { opacity: v, transform: [{ translateY }] }]}
+                    testID={`tourReadyStop_${idx + 1}`}
+                  >
                     <View style={styles.timelineDotContainer}>
                       <View style={styles.timelineDot}>
                         <Text style={styles.timelineNumber}>{idx + 1}</Text>
                       </View>
                     </View>
-                    
-                    <View style={styles.landmarkCard}>
-                      <Image
-                        source={{ uri: imageUrl }}
-                        style={styles.landmarkImage}
-                        resizeMode="cover"
-                      />
-                      <View style={styles.landmarkInfo}>
-                        <Text style={styles.landmarkName} numberOfLines={1}>{lm.name}</Text>
+
+                    <View style={styles.landmarkRowCard}>
+                      <View style={styles.landmarkTextCol}>
+                        <Text style={styles.landmarkName} numberOfLines={1}>
+                          {lm.name}
+                        </Text>
                         <Text style={styles.landmarkDesc} numberOfLines={2}>
                           {lm.description}
                         </Text>
                       </View>
+
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.landmarkThumb}
+                        resizeMode="cover"
+                      />
                     </View>
-                  </View>
+                  </Animated.View>
                 );
               })}
             </View>
@@ -176,16 +207,18 @@ export default function TourReadyScreen() {
   );
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F6F8FB",
   },
   header: {
     paddingTop: Platform.OS === "ios" ? 60 : 40,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#F6F8FB",
     zIndex: 10,
   },
   backButton: {
@@ -197,7 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingBottom: 120,
   },
   content: {
@@ -210,10 +243,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sparkleIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 136, 229, 0.1)",
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: "rgba(30, 136, 229, 0.10)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -235,10 +268,17 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     padding: 16,
-    borderRadius: 16,
-    marginBottom: 32,
+    borderRadius: 18,
+    marginBottom: 26,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.06)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   stat: {
     flexDirection: "row",
@@ -272,22 +312,22 @@ const styles = StyleSheet.create({
   timelineLine: {
     position: "absolute",
     left: 14,
-    top: 20,
+    top: 8,
     bottom: 0,
     width: 2,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "rgba(15, 23, 42, 0.10)",
   },
   timelineItem: {
     flexDirection: "row",
-    marginBottom: 24,
+    marginBottom: 14,
     alignItems: "flex-start",
   },
   timelineDotContainer: {
     width: 30,
     alignItems: "center",
-    marginRight: 16,
+    marginRight: 14,
     zIndex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F6F8FB",
     paddingVertical: 4,
   },
   timelineDot: {
@@ -298,38 +338,45 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#fff",
-    shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    borderColor: "#F6F8FB",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 5,
   },
   timelineNumber: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "700",
   },
-  landmarkCard: {
+  landmarkRowCard: {
     flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    overflow: "hidden",
+    minHeight: 92,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    borderColor: "rgba(15, 23, 42, 0.06)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
     elevation: 2,
   },
-  landmarkImage: {
-    width: "100%",
-    height: 140,
-    backgroundColor: "#F1F5F9",
+  landmarkTextCol: {
+    flex: 1,
+    paddingRight: 2,
   },
-  landmarkInfo: {
-    padding: 16,
+  landmarkThumb: {
+    width: Math.min(92, Math.max(80, Math.round(SCREEN_WIDTH * 0.22))),
+    height: Math.min(92, Math.max(80, Math.round(SCREEN_WIDTH * 0.22))),
+    borderRadius: 16,
+    backgroundColor: "#EEF2F7",
   },
   landmarkName: {
     fontSize: 16,

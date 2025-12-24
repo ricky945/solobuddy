@@ -26,7 +26,6 @@ import {
   ArrowRight,
   X,
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { generateText } from "@rork-ai/toolkit-sdk";
 
 import Colors from "@/constants/colors";
@@ -81,6 +80,9 @@ export default function WalkingTourScreen() {
   const sheetHeight = useRef(new Animated.Value(SHEET_MIN)).current;
   const dragStart = useRef<number>(SHEET_MIN);
 
+  const topFade = useRef(new Animated.Value(0)).current;
+  const sheetFade = useRef(new Animated.Value(0)).current;
+
   const landmarks: Landmark[] = tour?.landmarks ?? [];
   const currentLandmark = landmarks[currentIdx];
 
@@ -132,6 +134,13 @@ export default function WalkingTourScreen() {
       },
     });
   }, [sheetHeight]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(topFade, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(sheetFade, { toValue: 1, duration: 520, useNativeDriver: true }),
+    ]).start();
+  }, [sheetFade, topFade]);
 
   useEffect(() => {
     const setupAudio = async () => {
@@ -436,14 +445,9 @@ export default function WalkingTourScreen() {
         )}
       </MapView>
 
-      <LinearGradient
-        colors={["rgba(0,0,0,0.34)", "rgba(0,0,0,0.00)"]}
-        locations={[0, 1]}
-        style={styles.topGradient}
-        pointerEvents="none"
-      />
+      <View style={styles.topScrim} pointerEvents="none" />
 
-      <View style={styles.topBar} pointerEvents="box-none">
+      <Animated.View style={[styles.topBar, { opacity: topFade }]} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.back()}
@@ -452,9 +456,9 @@ export default function WalkingTourScreen() {
         >
           <ChevronLeft size={22} color="#FFFFFF" />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <Animated.View style={[styles.sheet, { height: sheetHeight }]} testID="walkingTourSheet">
+      <Animated.View style={[styles.sheet, { height: sheetHeight, opacity: sheetFade }]} testID="walkingTourSheet">
         <View {...panResponder.panHandlers} style={styles.sheetHandleArea} testID="walkingTourSheetHandle">
           <View style={styles.handlePill} />
         </View>
@@ -658,12 +662,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  topGradient: {
+  topScrim: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 120,
+    backgroundColor: "rgba(15, 23, 42, 0.20)",
   },
   topBar: {
     position: "absolute",
