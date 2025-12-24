@@ -1,41 +1,42 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  StyleSheet,
-  View,
-  Platform,
   ActivityIndicator,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   Animated,
-  PanResponder,
   Dimensions,
+  FlatList,
   Image,
   Modal,
+  PanResponder,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type ListRenderItem,
 } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import MapView, { Marker, PROVIDER_DEFAULT, type Region } from "react-native-maps";
 import * as Location from "expo-location";
-import { Plus, MapPin, Sparkles, User as UserIcon, Globe, Bell } from "lucide-react-native";
+import { Bell, Globe, MapPin, Plus, Sparkles, User as UserIcon } from "lucide-react-native";
 
 import Colors from "@/constants/colors";
-import { MapLandmark, LandmarkReview } from "@/types";
+import type { LandmarkReview, MapLandmark } from "@/types";
 import { trpc } from "@/lib/trpc";
 import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
 import { useUser } from "@/contexts/UserContext";
 
-type LocationTab = "touristic" | "unique";
+type ExploreTab = "touristic" | "unique";
+
+type LocationState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; coords: { latitude: number; longitude: number } };
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const BOTTOM_SHEET_MIN_HEIGHT = 280;
-const BOTTOM_SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.7;
+const SHEET_MIN_HEIGHT = 260;
+const SHEET_MAX_HEIGHT = Math.min(560, Math.max(420, SCREEN_HEIGHT * 0.65));
 
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -50,9 +51,8 @@ function calculateDistance(
 }
 
 function formatDistance(km: number): string {
-  if (km < 1) {
-    return `${Math.round(km * 1000)}m`;
-  }
+  if (!Number.isFinite(km) || km < 0) return "";
+  if (km < 1) return `${Math.round(km * 1000)}m`;
   return `${km.toFixed(1)}km`;
 }
 
@@ -62,175 +62,102 @@ function formatNotificationTime(timestamp: number): string {
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  
-  if (minutes < 1) return 'Just now';
+
+  if (minutes < 1) return "Just now";
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString();
 }
 
+function getErrorMessage(e: unknown): string {
+  if (!e) return "Something went wrong";
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message || "Something went wrong";
+  const msg = (e as { message?: unknown })?.message;
+  if (typeof msg === "string") return msg;
+  return "Something went wrong";
+}
+
+function isValidCoordinate(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+function isValidLatLng(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
+type ExploreItem = MapLandmark & { distanceKm: number };
+
 export default function ExploreScreen() {
   const { user } = useUser();
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(true);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [landmarks, setLandmarks] = useState<(MapLandmark & { distance?: number })[]>([]);
+
+  const [activeTab, setActiveTab] = useState<ExploreTab>("touristic");
   const [selectedLandmark, setSelectedLandmark] = useState<MapLandmark | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<LocationTab>("touristic");
+  const [isDetailVisible, setIsDetailVisible] = useState<boolean>(false);
+  const [isAddVisible, setIsAddVisible] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
-  
-  const bottomSheetHeight = useRef(new Animated.Value(BOTTOM_SHEET_MIN_HEIGHT)).current;
-  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
-  const touristicDiscoverQuery = trpc.landmarks.discover.useQuery(
-    {
-      latitude: location?.coords.latitude || 0,
-      longitude: location?.coords.longitude || 0,
-      radius: 5000,
-      type: "touristic",
-    },
-    {
-      enabled: !!location && activeTab === "touristic",
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
-      staleTime: 5 * 60 * 1000,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const [locationState, setLocationState] = useState<LocationState>({ status: "loading" });
 
-  const uniqueLandmarksQuery = trpc.landmarks.getAll.useQuery(
-    {
-      latitude: location?.coords.latitude,
-      longitude: location?.coords.longitude,
-      radius: 25,
-    },
-    {
-      enabled: !!location && activeTab === "unique",
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
-      staleTime: 30 * 1000,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const mapRef = useRef<MapView | null>(null);
+  const didSetInitialRegion = useRef<boolean>(false);
 
-  const activeQuery = activeTab === "touristic" ? touristicDiscoverQuery : uniqueLandmarksQuery;
+  const sheetHeight = useRef(new Animated.Value(SHEET_MIN_HEIGHT)).current;
+  const [sheetExpanded, setSheetExpanded] = useState<boolean>(false);
 
-  // Add robust error logging
-  useEffect(() => {
-    if (activeQuery.error) {
-      console.error(`[Explore] ${activeTab} query failed:`, activeQuery.error);
-    }
-  }, [activeQuery.error, activeTab]);
-
-  useEffect(() => {
-    if (!location) return;
-
-    if (activeTab === "touristic") {
-      const raw = (touristicDiscoverQuery.data?.landmarks as MapLandmark[] | undefined) ?? [];
-      console.log("[Explore] Loaded", raw.length, "touristic landmarks");
-
-      const landmarksWithDistance = raw.map((landmark) => ({
-        ...landmark,
-        distance: calculateDistance(
-          location.coords.latitude,
-          location.coords.longitude,
-          landmark.coordinates.latitude,
-          landmark.coordinates.longitude
-        ),
-      }));
-
-      const sorted = landmarksWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-      setLandmarks(sorted);
-      return;
-    }
-
-    const rawAll = (uniqueLandmarksQuery.data?.landmarks as MapLandmark[] | undefined) ?? [];
-    const uniqueOnly = rawAll.filter((l) => l.type === "unique");
-    console.log("[Explore] Loaded", uniqueOnly.length, "unique landmarks from global DB");
-
-    const landmarksWithDistance = uniqueOnly.map((landmark) => ({
-      ...landmark,
-      distance: calculateDistance(
-        location.coords.latitude,
-        location.coords.longitude,
-        landmark.coordinates.latitude,
-        landmark.coordinates.longitude
-      ),
-    }));
-
-    const sorted = landmarksWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-    setLandmarks(sorted);
-  }, [activeTab, location, touristicDiscoverQuery.data, uniqueLandmarksQuery.data]);
-
-  useEffect(() => {
-    if (activeQuery.isError) {
-      console.error("[Explore] Error:", activeQuery.error);
-    }
-  }, [activeQuery.isError, activeQuery.error]);
+  const coords = locationState.status === "ready" ? locationState.coords : null;
 
   const getLocation = useCallback(async () => {
-    console.log("[Explore] Getting location...");
-    setIsLoadingLocation(true);
-    setLocationError(null);
+    console.log("[Explore] getLocation start", { platform: Platform.OS });
+    setLocationState({ status: "loading" });
 
     try {
       if (Platform.OS === "web") {
         if (!navigator.geolocation?.getCurrentPosition) {
-          console.error("[Explore] Web geolocation API is not available");
-          setLocationError("Location is not supported in this browser.");
-          setIsLoadingLocation(false);
+          setLocationState({
+            status: "error",
+            message: "Location is not supported in this browser.",
+          });
           return;
         }
 
         navigator.geolocation.getCurrentPosition(
-          (position) => {
-            console.log("[Explore] Web location success", position.coords.latitude, position.coords.longitude);
-            setLocation({
-              coords: {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                altitude: position.coords.altitude ?? null,
-                accuracy: position.coords.accuracy ?? null,
-                altitudeAccuracy: (position.coords as unknown as { altitudeAccuracy?: number | null }).altitudeAccuracy ?? null,
-                heading: position.coords.heading ?? null,
-                speed: position.coords.speed ?? null,
-              },
-              timestamp: Date.now(),
-            });
-            setIsLoadingLocation(false);
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            console.log("[Explore] web geolocation ok", { lat, lng });
+            if (!isValidLatLng(lat, lng)) {
+              setLocationState({ status: "error", message: "Invalid location received." });
+              return;
+            }
+            setLocationState({ status: "ready", coords: { latitude: lat, longitude: lng } });
           },
-          (error) => {
-            console.error("[Explore] Web location error:", error);
-            setLocationError(
-              "Couldn’t get your location. Please allow location access in your browser settings and try again."
-            );
-            setIsLoadingLocation(false);
+          (err) => {
+            console.error("[Explore] web geolocation error", err);
+            setLocationState({
+              status: "error",
+              message: "Couldn’t get your location. Please allow location access and try again.",
+            });
           },
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
+
         return;
       }
 
-      const hasServicesEnabled = await Location.hasServicesEnabledAsync();
-      console.log("[Explore] Location services enabled:", hasServicesEnabled);
-      if (!hasServicesEnabled) {
-        setLocationError("Location Services are turned off. Please enable them and try again.");
-        setIsLoadingLocation(false);
+      const enabled = await Location.hasServicesEnabledAsync();
+      console.log("[Explore] native hasServicesEnabledAsync", { enabled });
+      if (!enabled) {
+        setLocationState({ status: "error", message: "Location Services are turned off." });
         return;
       }
 
       const perm = await Location.requestForegroundPermissionsAsync();
-      console.log("[Explore] Foreground location permission:", perm.status);
-
+      console.log("[Explore] native location permission", { status: perm.status });
       if (perm.status !== "granted") {
-        setLocationError("Location permission was denied. Please enable it in Settings and try again.");
-        setIsLoadingLocation(false);
+        setLocationState({ status: "error", message: "Location permission was denied." });
         return;
       }
 
@@ -239,30 +166,39 @@ export default function ExploreScreen() {
           accuracy: Location.Accuracy.Balanced,
           mayShowUserSettingsDialog: true,
         });
-        console.log("[Explore] Native location success", loc.coords.latitude, loc.coords.longitude);
-        setLocation(loc);
-        setIsLoadingLocation(false);
+        const lat = loc.coords.latitude;
+        const lng = loc.coords.longitude;
+        console.log("[Explore] native getCurrentPositionAsync ok", { lat, lng });
+        if (!isValidLatLng(lat, lng)) {
+          setLocationState({ status: "error", message: "Invalid location received." });
+          return;
+        }
+        setLocationState({ status: "ready", coords: { latitude: lat, longitude: lng } });
         return;
-      } catch (err) {
-        console.error("[Explore] getCurrentPositionAsync failed, trying last known position", err);
+      } catch (e) {
+        console.error("[Explore] native getCurrentPositionAsync failed", e);
       }
 
       const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 2000 });
       if (lastKnown) {
-        console.log("[Explore] Using last known position", lastKnown.coords.latitude, lastKnown.coords.longitude);
-        setLocation(lastKnown);
-        setIsLoadingLocation(false);
+        const lat = lastKnown.coords.latitude;
+        const lng = lastKnown.coords.longitude;
+        console.log("[Explore] native last known ok", { lat, lng });
+        if (!isValidLatLng(lat, lng)) {
+          setLocationState({ status: "error", message: "Invalid location received." });
+          return;
+        }
+        setLocationState({ status: "ready", coords: { latitude: lat, longitude: lng } });
         return;
       }
 
-      setLocationError(
-        "Couldn’t get your location. Please check Location Services, network, and try again."
-      );
-      setIsLoadingLocation(false);
-    } catch (error) {
-      console.error("[Explore] Error:", error);
-      setLocationError("Couldn’t get your location. Please try again.");
-      setIsLoadingLocation(false);
+      setLocationState({
+        status: "error",
+        message: "Couldn’t get your location. Please try again.",
+      });
+    } catch (e) {
+      console.error("[Explore] getLocation fatal", e);
+      setLocationState({ status: "error", message: "Couldn’t get your location. Please try again." });
     }
   }, []);
 
@@ -270,108 +206,254 @@ export default function ExploreScreen() {
     getLocation();
   }, [getLocation]);
 
+  const touristicQuery = trpc.landmarks.discover.useQuery(
+    {
+      latitude: coords?.latitude ?? 0,
+      longitude: coords?.longitude ?? 0,
+      radius: 5000,
+      type: "touristic",
+    },
+    {
+      enabled: Boolean(coords) && activeTab === "touristic",
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  const allQuery = trpc.landmarks.getAll.useQuery(
+    {
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
+      radius: 25,
+    },
+    {
+      enabled: Boolean(coords) && activeTab === "unique",
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      staleTime: 30 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  const activeQuery = activeTab === "touristic" ? touristicQuery : allQuery;
+
+  useEffect(() => {
+    if (activeQuery.error) {
+      console.error("[Explore] activeQuery error", { tab: activeTab, error: activeQuery.error });
+    }
+  }, [activeQuery.error, activeTab]);
+
+  const items: ExploreItem[] = useMemo(() => {
+    if (!coords) return [];
+
+    const raw: MapLandmark[] =
+      activeTab === "touristic"
+        ? ((touristicQuery.data?.landmarks as MapLandmark[] | undefined) ?? [])
+        : ((allQuery.data?.landmarks as MapLandmark[] | undefined) ?? []).filter((l) => l.type === "unique");
+
+    const mapped: ExploreItem[] = raw
+      .map((l) => {
+        const lat = l.coordinates?.latitude;
+        const lng = l.coordinates?.longitude;
+        if (!isValidCoordinate(lat) || !isValidCoordinate(lng) || !isValidLatLng(lat, lng)) {
+          console.warn("[Explore] dropping landmark with invalid coords", { id: l.id, lat, lng });
+          return null;
+        }
+        const distanceKm = calculateDistanceKm(coords.latitude, coords.longitude, lat, lng);
+        return { ...l, distanceKm };
+      })
+      .filter((x): x is ExploreItem => x !== null && Number.isFinite(x.distanceKm));
+
+    mapped.sort((a, b) => a.distanceKm - b.distanceKm);
+    return mapped;
+  }, [activeTab, allQuery.data?.landmarks, coords, touristicQuery.data?.landmarks]);
+
+  const region: Region | null = useMemo(() => {
+    if (!coords) return null;
+    return {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      latitudeDelta: 0.06,
+      longitudeDelta: 0.06,
+    };
+  }, [coords]);
+
+  useEffect(() => {
+    if (!region) return;
+    if (didSetInitialRegion.current) return;
+
+    didSetInitialRegion.current = true;
+    console.log("[Explore] initial region set", region);
+
+    requestAnimationFrame(() => {
+      try {
+        mapRef.current?.animateToRegion(region, 450);
+      } catch (e) {
+        console.error("[Explore] animateToRegion failed", e);
+      }
+    });
+  }, [region]);
+
+  const openLandmark = useCallback((landmark: MapLandmark) => {
+    console.log("[Explore] openLandmark", { id: landmark.id, type: landmark.type, name: landmark.name });
+    setSelectedLandmark(landmark);
+    setIsDetailVisible(true);
+  }, []);
+
+  const markerColor = useCallback((type: MapLandmark["type"]) => {
+    if (type === "unique") return "#10B981";
+    if (type === "restaurant") return "#F59E0B";
+    return Colors.light.primary;
+  }, []);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 5;
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderMove: (_, g) => {
+        const base = sheetExpanded ? SHEET_MAX_HEIGHT : SHEET_MIN_HEIGHT;
+        const next = Math.max(SHEET_MIN_HEIGHT, Math.min(SHEET_MAX_HEIGHT, base - g.dy));
+        sheetHeight.setValue(next);
       },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy < 0 && !isExpanded) {
-          const newHeight = Math.min(
-            BOTTOM_SHEET_MIN_HEIGHT - gestureState.dy,
-            BOTTOM_SHEET_MAX_HEIGHT
-          );
-          bottomSheetHeight.setValue(newHeight);
-        } else if (gestureState.dy > 0 && isExpanded) {
-          const newHeight = Math.max(
-            BOTTOM_SHEET_MAX_HEIGHT + gestureState.dy,
-            BOTTOM_SHEET_MIN_HEIGHT
-          );
-          bottomSheetHeight.setValue(newHeight);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy < -50 && !isExpanded) {
-          setIsExpanded(true);
-          Animated.spring(bottomSheetHeight, {
-            toValue: BOTTOM_SHEET_MAX_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        } else if (gestureState.dy > 50 && isExpanded) {
-          setIsExpanded(false);
-          Animated.spring(bottomSheetHeight, {
-            toValue: BOTTOM_SHEET_MIN_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        } else {
-          Animated.spring(bottomSheetHeight, {
-            toValue: isExpanded ? BOTTOM_SHEET_MAX_HEIGHT : BOTTOM_SHEET_MIN_HEIGHT,
-            useNativeDriver: false,
-            tension: 50,
-            friction: 8,
-          }).start();
-        }
+      onPanResponderRelease: (_, g) => {
+        const shouldExpand = g.dy < -40;
+        const shouldCollapse = g.dy > 40;
+
+        const nextExpanded = shouldExpand ? true : shouldCollapse ? false : sheetExpanded;
+        setSheetExpanded(nextExpanded);
+        Animated.spring(sheetHeight, {
+          toValue: nextExpanded ? SHEET_MAX_HEIGHT : SHEET_MIN_HEIGHT,
+          useNativeDriver: false,
+          tension: 50,
+          friction: 9,
+        }).start();
       },
     })
   ).current;
 
-  const handleMarkerPress = (landmark: MapLandmark) => {
-    console.log("[Explore] Landmark selected:", landmark.name);
-    setSelectedLandmark(landmark);
-    setIsModalVisible(true);
-  };
+  const renderItem: ListRenderItem<ExploreItem> = useCallback(
+    ({ item }) => {
+      if (activeTab === "touristic") {
+        return (
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => openLandmark(item)}
+            activeOpacity={0.85}
+            testID={`explore-touristic-card-${item.id}`}
+          >
+            <View style={styles.cardIcon}>
+              <MapPin size={20} color={Colors.light.primary} />
+            </View>
+            <View style={styles.cardInfo}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={styles.cardDistance}>{formatDistance(item.distanceKm)}</Text>
+              </View>
+              <Text style={styles.cardDesc} numberOfLines={2}>
+                {item.description}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        );
+      }
 
-  const handleAddLandmark = (landmark: MapLandmark) => {
-    setLandmarks((prev) => {
-      const next = [landmark, ...prev];
-      return next;
+      const thumbnailUrl =
+        item.userImages?.[0] ||
+        item.imageUrl ||
+        `https://source.unsplash.com/300x300/?hidden%20gem,${encodeURIComponent(item.name)}`;
+
+      const reviews = item.reviews ?? [];
+      const avgRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / Math.max(1, reviews.length)
+          : 0;
+
+      const ratingText =
+        reviews.length > 0
+          ? `${avgRating.toFixed(1)} • ${reviews.length} review${reviews.length === 1 ? "" : "s"}`
+          : "No reviews yet";
+
+      return (
+        <TouchableOpacity
+          style={styles.gemCard}
+          onPress={() => openLandmark(item)}
+          activeOpacity={0.9}
+          testID={`explore-unique-card-${item.id}`}
+        >
+          <View style={styles.gemThumbWrap}>
+            <Image source={{ uri: thumbnailUrl }} style={styles.gemThumb} />
+          </View>
+
+          <View style={styles.gemBody}>
+            <View style={styles.gemTopRow}>
+              <Text style={styles.gemTitle} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={styles.gemDistance}>{formatDistance(item.distanceKm)}</Text>
+            </View>
+
+            <Text style={styles.gemMeta} numberOfLines={1}>
+              Suggested by {item.createdByName || "Anonymous"}
+            </Text>
+
+            <Text style={styles.gemRating}>{ratingText}</Text>
+
+            {reviews?.[0]?.comment ? (
+              <Text style={styles.gemSnippet} numberOfLines={2}>
+                “{reviews[0].comment}”
+              </Text>
+            ) : (
+              <Text style={styles.gemSnippetMuted} numberOfLines={2}>
+                Tap to view details and reviews.
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [activeTab, openLandmark]
+  );
+
+  const keyExtractor = useCallback((item: ExploreItem) => item.id, []);
+
+  const listEmpty = useMemo(() => {
+    if (activeQuery.isLoading) return null;
+
+    return (
+      <View style={styles.emptyContainer} testID="explore-empty">
+        <Text style={styles.emptyTitle}>{activeTab === "unique" ? "No hidden gems yet" : "No landmarks found"}</Text>
+        {activeTab === "unique" ? (
+          <Text style={styles.emptySubtitle}>Be the first to add something locals love.</Text>
+        ) : (
+          <Text style={styles.emptySubtitle}>Try moving the map or retrying.</Text>
+        )}
+      </View>
+    );
+  }, [activeQuery.isLoading, activeTab]);
+
+  const notifications = useMemo(() => {
+    const all = (items as MapLandmark[]).filter((l) => l.createdBy === user.id && l.type === "unique");
+    const result: { id: string; landmark: MapLandmark; review: LandmarkReview }[] = [];
+
+    all.forEach((landmark) => {
+      (landmark.reviews ?? []).forEach((review) => {
+        if (review.userId !== user.id) {
+          result.push({ id: `${landmark.id}-${review.id}`, landmark, review });
+        }
+      });
     });
-  };
 
-  const getMarkerColor = (type: string) => {
-    switch (type) {
-      case "touristic":
-        return Colors.light.primary;
-      case "unique":
-        return "#10B981";
-      default:
-        return Colors.light.primary;
-    }
-  };
+    result.sort((a, b) => (b.review.createdAt || 0) - (a.review.createdAt || 0));
+    return result;
+  }, [items, user.id]);
 
-  const getTabIcon = (tab: LocationTab) => {
-    switch (tab) {
-      case "touristic":
-        return MapPin;
-      case "unique":
-        return Sparkles;
-    }
-  };
-
-  const getTabColor = (tab: LocationTab) => {
-    switch (tab) {
-      case "touristic":
-        return Colors.light.primary;
-      case "unique":
-        return "#10B981";
-    }
-  };
-
-  const getTabLabel = (tab: LocationTab) => {
-    switch (tab) {
-      case "touristic":
-        return "Tourist Sites";
-      case "unique":
-        return "Hidden Gems";
-    }
-  };
-
-  if (isLoadingLocation) {
+  if (locationState.status === "loading") {
     return (
       <View style={styles.centerStateContainer} testID="explore-location-loading">
         <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -381,11 +463,11 @@ export default function ExploreScreen() {
     );
   }
 
-  if (!location) {
+  if (locationState.status === "error") {
     return (
       <View style={styles.centerStateContainer} testID="explore-location-error">
         <Text style={styles.centerStateTitle}>We can’t access your location</Text>
-        <Text style={styles.centerStateSubtitle}>{locationError ?? "Please try again."}</Text>
+        <Text style={styles.centerStateSubtitle}>{locationState.message}</Text>
         <TouchableOpacity
           onPress={getLocation}
           activeOpacity={0.85}
@@ -399,62 +481,57 @@ export default function ExploreScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="explore-screen">
       <MapView
+        ref={(r) => {
+          mapRef.current = r;
+        }}
         style={styles.map}
         provider={PROVIDER_DEFAULT}
-        initialRegion={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
+        initialRegion={region ?? undefined}
+        showsUserLocation
+        showsMyLocationButton
+        testID="explore-map"
       >
-        {landmarks.map((landmark) => (
+        {items.map((l) => (
           <Marker
-            key={landmark.id}
-            coordinate={{
-              latitude: landmark.coordinates.latitude,
-              longitude: landmark.coordinates.longitude,
-            }}
-            title={landmark.name}
-            onPress={() => handleMarkerPress(landmark)}
-            pinColor={getMarkerColor(landmark.type)}
+            key={l.id}
+            coordinate={{ latitude: l.coordinates.latitude, longitude: l.coordinates.longitude }}
+            title={l.name}
+            pinColor={markerColor(l.type)}
+            onPress={() => openLandmark(l)}
+            testID={`explore-marker-${l.id}`}
           />
         ))}
       </MapView>
 
-      <View style={styles.header}>
+      <View style={styles.header} pointerEvents="box-none">
         <View style={styles.logoContainer}>
-          <Image 
-            source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/renps5x3u8toqdey782pi' }} 
+          <Image
+            source={{ uri: "https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/renps5x3u8toqdey782pi" }}
             style={styles.logoIcon}
           />
           <Text style={styles.logoText}>SoloBuddy</Text>
         </View>
-        
+
         <View style={styles.headerActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => setShowNotificationsModal(true)}
             activeOpacity={0.8}
-            testID="notifications-button"
+            testID="explore-notifications-button"
           >
             <Bell size={22} color={Colors.light.text} />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.profileButton}
             onPress={() => setShowProfileModal(true)}
             activeOpacity={0.8}
+            testID="explore-profile-button"
           >
             {user.profile?.profilePictureUrl ? (
-              <Image 
-                source={{ uri: user.profile.profilePictureUrl }} 
-                style={styles.profileImage}
-              />
+              <Image source={{ uri: user.profile.profilePictureUrl }} style={styles.profileImage} />
             ) : (
               <View style={styles.profilePlaceholder}>
                 <UserIcon size={24} color={Colors.light.primary} />
@@ -464,155 +541,66 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      {activeQuery.isLoading && (
-        <View style={styles.loadingOverlay}>
+      {activeQuery.isLoading ? (
+        <View style={styles.loadingOverlay} testID="explore-loading-overlay">
           <ActivityIndicator color={Colors.light.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>Loading…</Text>
         </View>
-      )}
+      ) : null}
 
-      {activeQuery.isError && (
-        <View style={styles.errorOverlay}>
-          <Text style={styles.errorText}>
-            {activeQuery.error?.message || "Failed to load"}
-          </Text>
-          <TouchableOpacity onPress={() => activeQuery.refetch()} style={styles.retryButton}>
+      {activeQuery.isError ? (
+        <View style={styles.errorOverlay} testID="explore-error-overlay">
+          <Text style={styles.errorText}>{getErrorMessage(activeQuery.error)}</Text>
+          <TouchableOpacity onPress={() => activeQuery.refetch()} style={styles.retryButton} testID="explore-retry">
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
-      <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
-        <View {...panResponder.panHandlers} style={styles.handle}>
+      <Animated.View style={[styles.bottomSheet, { height: sheetHeight }]} testID="explore-sheet">
+        <View {...panResponder.panHandlers} style={styles.handle} testID="explore-sheet-handle">
           <View style={styles.handleBar} />
         </View>
 
-        <View style={styles.tabs}>
-          {(["touristic", "unique"] as LocationTab[]).map((tab) => {
-            const Icon = getTabIcon(tab);
-            const active = activeTab === tab;
-            const color = getTabColor(tab);
-            
-            return (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.tab, active && { backgroundColor: color }]}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Icon size={16} color={active ? "#fff" : color} />
-                <Text style={[styles.tabText, active && { color: "#fff" }]}>
-                  {getTabLabel(tab)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.tabs} testID="explore-tabs">
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "touristic" && styles.tabActivePrimary]}
+            onPress={() => setActiveTab("touristic")}
+            activeOpacity={0.85}
+            testID="explore-tab-touristic"
+          >
+            <MapPin size={16} color={activeTab === "touristic" ? "#fff" : Colors.light.primary} />
+            <Text style={[styles.tabText, activeTab === "touristic" && styles.tabTextActive]}>Tourist Sites</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "unique" && styles.tabActiveGreen]}
+            onPress={() => setActiveTab("unique")}
+            activeOpacity={0.85}
+            testID="explore-tab-unique"
+          >
+            <Sparkles size={16} color={activeTab === "unique" ? "#fff" : "#10B981"} />
+            <Text style={[styles.tabText, activeTab === "unique" && styles.tabTextActive]}>Hidden Gems</Text>
+          </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {landmarks.length === 0 && !activeQuery.isLoading ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>
-                {activeTab === "unique" ? "It’s empty" : "No landmarks found"}
-              </Text>
-              {activeTab === "unique" ? (
-                <Text style={styles.emptySubtitle}>
-                  No user-submitted hidden gems nearby yet. Be the first to add one.
-                </Text>
-              ) : null}
-            </View>
-          ) : activeTab === "touristic" ? (
-            landmarks.map((landmark) => (
-              <TouchableOpacity
-                key={landmark.id}
-                style={styles.card}
-                onPress={() => handleMarkerPress(landmark)}
-                activeOpacity={0.85}
-                testID={`touristic-landmark-card-${landmark.id}`}
-              >
-                <View style={styles.cardIcon}>
-                  <MapPin size={20} color={Colors.light.primary} />
-                </View>
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardName} numberOfLines={1}>
-                      {landmark.name}
-                    </Text>
-                    <Text style={styles.cardDistance}>{formatDistance(landmark.distance || 0)}</Text>
-                  </View>
-                  <Text style={styles.cardDesc} numberOfLines={2}>
-                    {landmark.description}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            landmarks.map((landmark) => {
-              const thumbnailUrl =
-                landmark.userImages?.[0] ||
-                landmark.imageUrl ||
-                `https://source.unsplash.com/300x300/?hidden%20gem,${encodeURIComponent(landmark.name)}`;
-
-              const avgRating =
-                landmark.reviews.length > 0
-                  ? landmark.reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / landmark.reviews.length
-                  : 0;
-
-              const ratingText =
-                landmark.reviews.length > 0
-                  ? `${avgRating.toFixed(1)} • ${landmark.reviews.length} review${
-                      landmark.reviews.length === 1 ? "" : "s"
-                    }`
-                  : "No reviews yet";
-
-              return (
-                <TouchableOpacity
-                  key={landmark.id}
-                  style={styles.gemCard}
-                  onPress={() => handleMarkerPress(landmark)}
-                  activeOpacity={0.9}
-                  testID={`unique-landmark-card-${landmark.id}`}
-                >
-                  <View style={styles.gemThumbWrap}>
-                    <Image source={{ uri: thumbnailUrl }} style={styles.gemThumb} />
-                  </View>
-
-                  <View style={styles.gemBody}>
-                    <View style={styles.gemTopRow}>
-                      <Text style={styles.gemTitle} numberOfLines={1}>
-                        {landmark.name}
-                      </Text>
-                      <Text style={styles.gemDistance}>{formatDistance(landmark.distance || 0)}</Text>
-                    </View>
-
-                    <Text style={styles.gemMeta} numberOfLines={1}>
-                      Suggested by {landmark.createdByName || "Anonymous"}
-                    </Text>
-
-                    <Text style={styles.gemRating}>{ratingText}</Text>
-
-                    {landmark.reviews?.[0]?.comment ? (
-                      <Text style={styles.gemSnippet} numberOfLines={2}>
-                        “{landmark.reviews[0].comment}”
-                      </Text>
-                    ) : (
-                      <Text style={styles.gemSnippetMuted} numberOfLines={2}>
-                        Tap to view details and reviews.
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          ListEmptyComponent={listEmpty}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          testID="explore-list"
+        />
       </Animated.View>
 
       {activeTab === "unique" ? (
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setIsAddModalVisible(true)}
+          onPress={() => setIsAddVisible(true)}
           activeOpacity={0.9}
-          testID="add-hidden-gem-button"
+          testID="explore-add-hidden-gem"
         >
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
@@ -620,47 +608,35 @@ export default function ExploreScreen() {
 
       <LandmarkDetailModal
         landmark={selectedLandmark}
-        userLocation={
-          location
-            ? {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }
-            : null
-        }
-        visible={isModalVisible}
+        userLocation={coords}
+        visible={isDetailVisible}
         onClose={() => {
-          setIsModalVisible(false);
+          setIsDetailVisible(false);
           setSelectedLandmark(null);
         }}
         onLandmarkUpdated={(updated) => {
-          console.log("[Explore] Landmark updated in modal", updated.id);
+          console.log("[Explore] onLandmarkUpdated", { id: updated.id });
           setSelectedLandmark(updated);
-          setLandmarks((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)));
+          if (activeTab === "unique") allQuery.refetch();
         }}
         onLandmarkDeleted={(landmarkId) => {
-          console.log("[Explore] Landmark deleted in modal", landmarkId);
+          console.log("[Explore] onLandmarkDeleted", { landmarkId });
           setSelectedLandmark(null);
-          setIsModalVisible(false);
-          setLandmarks((prev) => prev.filter((l) => l.id !== landmarkId));
-          uniqueLandmarksQuery.refetch();
+          setIsDetailVisible(false);
+          allQuery.refetch();
         }}
       />
 
-      {location && (
+      {coords ? (
         <AddLandmarkModal
-          visible={isAddModalVisible}
-          onClose={() => setIsAddModalVisible(false)}
-          onAdd={(landmark: MapLandmark) => {
-            handleAddLandmark(landmark);
-            uniqueLandmarksQuery.refetch();
+          visible={isAddVisible}
+          onClose={() => setIsAddVisible(false)}
+          onAdd={() => {
+            allQuery.refetch();
           }}
-          coordinates={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          }}
+          coordinates={coords}
         />
-      )}
+      ) : null}
 
       <Modal
         visible={showProfileModal}
@@ -668,67 +644,61 @@ export default function ExploreScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowProfileModal(false)}
       >
-        <View style={styles.profileModalContainer}>
+        <View style={styles.profileModalContainer} testID="explore-profile-modal">
           <View style={styles.profileModalHeader}>
             <Text style={styles.profileModalTitle}>Profile</Text>
-            <TouchableOpacity onPress={() => setShowProfileModal(false)}>
-              <Text style={styles.closeButton}>Done</Text>
+            <TouchableOpacity onPress={() => setShowProfileModal(false)} testID="explore-profile-close">
+              <Text style={styles.closeButtonText}>Done</Text>
             </TouchableOpacity>
           </View>
-          
-          <ScrollView style={styles.profileModalContent}>
+
+          <View style={styles.profileModalContent}>
             <View style={styles.profileModalAvatar}>
               {user.profile?.profilePictureUrl ? (
-                <Image 
-                  source={{ uri: user.profile.profilePictureUrl }} 
-                  style={styles.profileModalImage}
-                />
+                <Image source={{ uri: user.profile.profilePictureUrl }} style={styles.profileModalImage} />
               ) : (
                 <View style={styles.profileModalPlaceholder}>
                   <UserIcon size={48} color={Colors.light.textSecondary} />
                 </View>
               )}
             </View>
-            
-            {user.profile?.name && (
+
+            {user.profile?.name ? (
               <>
                 <Text style={styles.profileModalName}>{user.profile.name}</Text>
-                {user.profile.bio && (
-                  <Text style={styles.profileModalBio}>{user.profile.bio}</Text>
-                )}
-                {user.profile.currentCity && (
+                {user.profile.bio ? <Text style={styles.profileModalBio}>{user.profile.bio}</Text> : null}
+                {user.profile.currentCity ? (
                   <View style={styles.profileModalInfo}>
                     <MapPin size={16} color={Colors.light.textSecondary} />
                     <Text style={styles.profileModalInfoText}>{user.profile.currentCity}</Text>
                   </View>
-                )}
-                {user.profile.countriesVisited && user.profile.countriesVisited.length > 0 && (
+                ) : null}
+
+                {user.profile.countriesVisited && user.profile.countriesVisited.length > 0 ? (
                   <View style={styles.profileModalCountries}>
                     <View style={styles.profileModalInfo}>
                       <Globe size={16} color={Colors.light.textSecondary} />
                       <Text style={styles.profileModalInfoText}>
-                        {user.profile.countriesVisited.length} {user.profile.countriesVisited.length === 1 ? 'Country' : 'Countries'} Visited
+                        {user.profile.countriesVisited.length} {user.profile.countriesVisited.length === 1 ? "Country" : "Countries"} Visited
                       </Text>
                     </View>
                     <View style={styles.countriesList}>
-                      {user.profile.countriesVisited.map((country: string, index: number) => (
-                        <View key={index} style={styles.countryChip}>
+                      {user.profile.countriesVisited.map((country: string, idx: number) => (
+                        <View key={`${country}-${idx}`} style={styles.countryChip}>
                           <Text style={styles.countryChipText}>{country}</Text>
                         </View>
                       ))}
                     </View>
                   </View>
-                )}
+                ) : null}
               </>
-            )}
-            
-            {!user.profile?.name && (
+            ) : (
               <View style={styles.noProfileContainer}>
                 <Text style={styles.noProfileText}>No profile information yet</Text>
                 <Text style={styles.noProfileSubtext}>Visit the Account tab to set up your profile</Text>
               </View>
             )}
-          </ScrollView>
+          </View>
         </View>
       </Modal>
 
@@ -738,96 +708,71 @@ export default function ExploreScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowNotificationsModal(false)}
       >
-        <View style={styles.notificationsModalContainer}>
+        <View style={styles.notificationsModalContainer} testID="explore-notifications-modal">
           <View style={styles.notificationsModalHeader}>
             <Text style={styles.notificationsModalTitle}>Notifications</Text>
-            <TouchableOpacity onPress={() => setShowNotificationsModal(false)}>
-              <Text style={styles.closeButton}>Done</Text>
+            <TouchableOpacity onPress={() => setShowNotificationsModal(false)} testID="explore-notifications-close">
+              <Text style={styles.closeButtonText}>Done</Text>
             </TouchableOpacity>
           </View>
-          
-          <ScrollView style={styles.notificationsModalContent}>
-            {(() => {
-              const userLandmarks = landmarks.filter(l => l.createdBy === user.id && l.type === 'unique');
-              const notifications: { id: string; type: string; landmark: MapLandmark; review: LandmarkReview }[] = [];
-              
-              userLandmarks.forEach(landmark => {
-                landmark.reviews.forEach(review => {
-                  if (review.userId !== user.id) {
-                    notifications.push({
-                      id: `${landmark.id}-${review.id}`,
-                      type: 'review',
-                      landmark,
-                      review,
-                    });
-                  }
-                });
-              });
-              
-              notifications.sort((a, b) => b.review.createdAt - a.review.createdAt);
-              
-              if (notifications.length === 0) {
-                return (
-                  <View style={styles.noNotificationsContainer}>
-                    <View style={styles.noNotificationsIcon}>
-                      <Bell size={48} color={Colors.light.textSecondary} />
-                    </View>
-                    <Text style={styles.noNotificationsText}>No notifications yet</Text>
-                    <Text style={styles.noNotificationsSubtext}>
-                      You&apos;ll see updates here when people interact with your hidden gems
-                    </Text>
-                  </View>
-                );
-              }
-              
-              return notifications.map(notification => (
+
+          {notifications.length === 0 ? (
+            <View style={styles.noNotificationsContainer} testID="explore-no-notifications">
+              <View style={styles.noNotificationsIcon}>
+                <Bell size={48} color={Colors.light.textSecondary} />
+              </View>
+              <Text style={styles.noNotificationsText}>No notifications yet</Text>
+              <Text style={styles.noNotificationsSubtext}>
+                You’ll see updates here when people review your hidden gems.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={notifications}
+              keyExtractor={(n) => n.id}
+              contentContainerStyle={styles.notificationsList}
+              renderItem={({ item }) => (
                 <TouchableOpacity
-                  key={notification.id}
                   style={styles.notificationCard}
                   onPress={() => {
                     setShowNotificationsModal(false);
-                    setSelectedLandmark(notification.landmark);
-                    setIsModalVisible(true);
+                    openLandmark(item.landmark);
                   }}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
+                  testID={`explore-notification-${item.id}`}
                 >
                   <View style={styles.notificationIconWrap}>
-                    {notification.review.userAvatar ? (
-                      <Image 
-                        source={{ uri: notification.review.userAvatar }} 
-                        style={styles.notificationUserAvatar}
-                      />
+                    {item.review.userAvatar ? (
+                      <Image source={{ uri: item.review.userAvatar }} style={styles.notificationUserAvatar} />
                     ) : (
                       <View style={styles.notificationUserPlaceholder}>
                         <UserIcon size={20} color={Colors.light.textSecondary} />
                       </View>
                     )}
                   </View>
-                  
+
                   <View style={styles.notificationContent}>
                     <Text style={styles.notificationText}>
-                      <Text style={styles.notificationUserName}>{notification.review.userName}</Text>
-                      {' left a review on your landmark '}
-                      <Text style={styles.notificationLandmarkName}>{notification.landmark.name}</Text>
+                      <Text style={styles.notificationUserName}>{item.review.userName}</Text>
+                      {" left a review on "}
+                      <Text style={styles.notificationLandmarkName}>{item.landmark.name}</Text>
                     </Text>
-                    
-                    {notification.review.comment && (
+
+                    {item.review.comment ? (
                       <View style={styles.notificationReviewBox}>
-                        <Text style={styles.notificationRating}>★ {notification.review.rating}/5</Text>
+                        <Text style={styles.notificationRating}>★ {item.review.rating}/5</Text>
                         <Text style={styles.notificationComment} numberOfLines={2}>
-                          &quot;{notification.review.comment}&quot;
+                          “{item.review.comment}”
                         </Text>
                       </View>
-                    )}
-                    
-                    <Text style={styles.notificationTime}>
-                      {formatNotificationTime(notification.review.createdAt)}
-                    </Text>
+                    ) : null}
+
+                    <Text style={styles.notificationTime}>{formatNotificationTime(item.review.createdAt)}</Text>
                   </View>
                 </TouchableOpacity>
-              ));
-            })()}
-          </ScrollView>
+              )}
+            />
+          )}
         </View>
       </Modal>
     </View>
@@ -835,9 +780,9 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  map: { flex: 1 },
+
   centerStateContainer: {
     flex: 1,
     backgroundColor: Colors.light.background,
@@ -875,9 +820,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700" as const,
   },
-  map: {
-    flex: 1,
-  },
+
   header: {
     position: "absolute" as const,
     top: Platform.OS === "ios" ? 60 : 40,
@@ -901,10 +844,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  logoIcon: {
-    width: 28,
-    height: 28,
-  },
+  logoIcon: { width: 28, height: 28 },
   logoText: {
     fontSize: 17,
     fontWeight: "700" as const,
@@ -940,10 +880,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  profileImage: {
-    width: 48,
-    height: 48,
-  },
+  profileImage: { width: 48, height: 48 },
   profilePlaceholder: {
     width: 48,
     height: 48,
@@ -951,115 +888,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  profileModalContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  profileModalHeader: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    marginTop: Platform.OS === "ios" ? 50 : 20,
-  },
-  profileModalTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: Colors.light.primary,
-  },
-  profileModalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 32,
-  },
-  profileModalAvatar: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  profileModalImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  profileModalPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.light.backgroundSecondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileModalName: {
-    fontSize: 28,
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-    textAlign: "center",
-    marginBottom: 12,
-    letterSpacing: -0.5,
-  },
-  profileModalBio: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  profileModalInfo: {
-    flexDirection: "row" as const,
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-    justifyContent: "center",
-  },
-  profileModalInfoText: {
-    fontSize: 15,
-    color: Colors.light.textSecondary,
-    fontWeight: "500" as const,
-  },
-  profileModalCountries: {
-    marginTop: 12,
-  },
-  countriesList: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 8,
-    marginTop: 12,
-    justifyContent: "center",
-  },
-  countryChip: {
-    backgroundColor: Colors.light.backgroundSecondary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  countryChipText: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
-  },
-  noProfileContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-  noProfileText: {
-    fontSize: 18,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
-    marginBottom: 8,
-  },
-  noProfileSubtext: {
-    fontSize: 15,
-    color: Colors.light.textSecondary,
-    textAlign: "center",
-  },
+
   loadingOverlay: {
     position: "absolute" as const,
     top: 60,
@@ -1075,11 +904,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  loadingText: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
-  },
+  loadingText: { fontSize: 14, fontWeight: "600" as const, color: Colors.light.text },
+
   errorOverlay: {
     position: "absolute" as const,
     top: 60,
@@ -1095,25 +921,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  errorText: {
-    fontSize: 14,
-    color: Colors.light.text,
-    marginBottom: 12,
-  },
+  errorText: { fontSize: 14, color: Colors.light.text, marginBottom: 12, textAlign: "center" },
   retryButton: {
     backgroundColor: Colors.light.primary,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  retryText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600" as const,
-  },
+  retryText: { color: "#fff", fontSize: 14, fontWeight: "600" as const },
+
   addButton: {
     position: "absolute" as const,
-    bottom: 300,
+    bottom: SHEET_MIN_HEIGHT + 24,
     right: 20,
     width: 56,
     height: 56,
@@ -1127,6 +946,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+
   bottomSheet: {
     position: "absolute" as const,
     bottom: 0,
@@ -1143,10 +963,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  handle: {
-    alignItems: "center",
-    paddingVertical: 12,
-  },
+  handle: { alignItems: "center", paddingVertical: 12 },
   handleBar: {
     width: 40,
     height: 4,
@@ -1154,34 +971,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  tabs: {
-    flexDirection: "row" as const,
-    gap: 8,
-    marginBottom: 12,
-  },
+  tabs: { flexDirection: "row" as const, gap: 8, marginBottom: 12 },
   tab: {
     flex: 1,
     flexDirection: "row" as const,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    paddingVertical: 8,
-    borderRadius: 10,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: Colors.light.backgroundSecondary,
   },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
+  tabActivePrimary: { backgroundColor: Colors.light.primary },
+  tabActiveGreen: { backgroundColor: "#10B981" },
+  tabText: { fontSize: 12, fontWeight: "700" as const, color: Colors.light.text },
+  tabTextActive: { color: "#fff" },
+
+  listContent: {
+    paddingBottom: 6,
   },
-  list: {
-    flex: 1,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: Colors.light.textSecondary,
-    marginTop: 20,
-  },
+
   emptyContainer: {
     paddingTop: 18,
     paddingHorizontal: 8,
@@ -1189,18 +998,50 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: "700" as const,
+    fontWeight: "800" as const,
     color: Colors.light.text,
     textAlign: "center",
   },
   emptySubtitle: {
     marginTop: 8,
     fontSize: 13,
-    fontWeight: "500" as const,
+    fontWeight: "600" as const,
     color: Colors.light.textSecondary,
     textAlign: "center",
     lineHeight: 18,
   },
+
+  card: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    marginBottom: 10,
+  },
+  cardIcon: { marginTop: 2 },
+  cardHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    gap: 8,
+  },
+  cardInfo: { flex: 1 },
+  cardName: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    flex: 1,
+  },
+  cardDistance: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.light.primary,
+  },
+  cardDesc: { fontSize: 13, color: Colors.light.textSecondary },
+
   gemCard: {
     flexDirection: "row" as const,
     alignItems: "center",
@@ -1222,13 +1063,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: Colors.light.backgroundSecondary,
   },
-  gemThumb: {
-    width: 64,
-    height: 64,
-  },
-  gemBody: {
-    flex: 1,
-  },
+  gemThumb: { width: 64, height: 64 },
+  gemBody: { flex: 1 },
   gemTopRow: {
     flexDirection: "row" as const,
     alignItems: "center",
@@ -1244,7 +1080,7 @@ const styles = StyleSheet.create({
   },
   gemDistance: {
     fontSize: 12,
-    fontWeight: "800" as const,
+    fontWeight: "900" as const,
     color: "#10B981",
   },
   gemMeta: {
@@ -1256,7 +1092,7 @@ const styles = StyleSheet.create({
   gemRating: {
     marginTop: 6,
     fontSize: 12,
-    fontWeight: "800" as const,
+    fontWeight: "900" as const,
     color: Colors.light.text,
   },
   gemSnippet: {
@@ -1273,47 +1109,83 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     lineHeight: 16,
   },
-  card: {
+
+  profileModalContainer: { flex: 1, backgroundColor: "#FFFFFF" },
+  profileModalHeader: {
     flexDirection: "row" as const,
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 14,
-    backgroundColor: Colors.light.card,
-    borderRadius: 12,
-    marginBottom: 10,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+    marginTop: Platform.OS === "ios" ? 50 : 20,
   },
-  cardIcon: {
-    marginTop: 2,
+  profileModalTitle: { fontSize: 20, fontWeight: "700" as const, color: Colors.light.text },
+  closeButtonText: { fontSize: 16, fontWeight: "700" as const, color: Colors.light.primary },
+  profileModalContent: { flex: 1, paddingHorizontal: 20, paddingTop: 32 },
+  profileModalAvatar: { alignItems: "center", marginBottom: 24 },
+  profileModalImage: { width: 120, height: 120, borderRadius: 60 },
+  profileModalPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.light.backgroundSecondary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  cardHeader: {
+  profileModalName: {
+    fontSize: 28,
+    fontWeight: "800" as const,
+    color: Colors.light.text,
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  profileModalBio: {
+    fontSize: 16,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  profileModalInfo: {
     flexDirection: "row" as const,
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+    gap: 8,
+    marginBottom: 12,
+    justifyContent: "center",
   },
-  cardInfo: {
-    flex: 1,
+  profileModalInfoText: { fontSize: 15, color: Colors.light.textSecondary, fontWeight: "600" as const },
+  profileModalCountries: { marginTop: 12 },
+  countriesList: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
+    marginTop: 12,
+    justifyContent: "center",
   },
-  cardName: {
-    fontSize: 15,
-    fontWeight: "600" as const,
-    color: Colors.light.text,
-    flex: 1,
-    marginRight: 8,
+  countryChip: {
+    backgroundColor: Colors.light.backgroundSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
-  cardDistance: {
-    fontSize: 13,
+  countryChipText: {
+    fontSize: 14,
     fontWeight: "700" as const,
-    color: Colors.light.primary,
+    color: Colors.light.text,
   },
-  cardDesc: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
+  noProfileContainer: { alignItems: "center", paddingVertical: 40 },
+  noProfileText: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: Colors.light.text,
+    marginBottom: 8,
   },
-  notificationsModalContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
+  noProfileSubtext: { fontSize: 15, color: Colors.light.textSecondary, textAlign: "center" },
+
+  notificationsModalContainer: { flex: 1, backgroundColor: "#FFFFFF" },
   notificationsModalHeader: {
     flexDirection: "row" as const,
     justifyContent: "space-between",
@@ -1324,28 +1196,19 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.light.border,
     marginTop: Platform.OS === "ios" ? 50 : 20,
   },
-  notificationsModalTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-  },
-  notificationsModalContent: {
-    flex: 1,
-    paddingTop: 8,
-  },
+  notificationsModalTitle: { fontSize: 20, fontWeight: "700" as const, color: Colors.light.text },
+  notificationsList: { paddingTop: 8 },
+
   noNotificationsContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 80,
     paddingHorizontal: 40,
   },
-  noNotificationsIcon: {
-    marginBottom: 20,
-    opacity: 0.3,
-  },
+  noNotificationsIcon: { marginBottom: 20, opacity: 0.3 },
   noNotificationsText: {
     fontSize: 18,
-    fontWeight: "700" as const,
+    fontWeight: "800" as const,
     color: Colors.light.text,
     marginBottom: 8,
     textAlign: "center",
@@ -1356,6 +1219,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
+
   notificationCard: {
     flexDirection: "row" as const,
     padding: 16,
@@ -1370,10 +1234,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: "hidden",
   },
-  notificationUserAvatar: {
-    width: 44,
-    height: 44,
-  },
+  notificationUserAvatar: { width: 44, height: 44 },
   notificationUserPlaceholder: {
     width: 44,
     height: 44,
@@ -1381,23 +1242,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  notificationContent: {
-    flex: 1,
-  },
+  notificationContent: { flex: 1 },
   notificationText: {
     fontSize: 15,
     color: Colors.light.text,
     lineHeight: 20,
     marginBottom: 8,
   },
-  notificationUserName: {
-    fontWeight: "700" as const,
-    color: Colors.light.text,
-  },
-  notificationLandmarkName: {
-    fontWeight: "700" as const,
-    color: Colors.light.primary,
-  },
+  notificationUserName: { fontWeight: "800" as const, color: Colors.light.text },
+  notificationLandmarkName: { fontWeight: "800" as const, color: Colors.light.primary },
   notificationReviewBox: {
     backgroundColor: Colors.light.backgroundSecondary,
     padding: 10,
@@ -1406,7 +1259,7 @@ const styles = StyleSheet.create({
   },
   notificationRating: {
     fontSize: 13,
-    fontWeight: "700" as const,
+    fontWeight: "800" as const,
     color: "#F59E0B",
     marginBottom: 4,
   },
@@ -1419,6 +1272,6 @@ const styles = StyleSheet.create({
   notificationTime: {
     fontSize: 12,
     color: Colors.light.textSecondary,
-    fontWeight: "500" as const,
+    fontWeight: "600" as const,
   },
 });
