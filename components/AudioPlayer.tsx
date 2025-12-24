@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   Image,
   Animated,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Audio } from "expo-av";
 import {
@@ -16,6 +17,7 @@ import {
   SkipForward,
   ChevronDown,
   ChevronUp,
+  Square,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -50,7 +52,9 @@ function buildUnsplashArtworkUrl(title: string, location: string) {
 }
 
 export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
   const [duration, setDuration] = useState<number>(Math.max(0, guide.duration * 1000));
@@ -83,22 +87,30 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [guide.location, guide.thumbnailUrl, guide.title]);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     const setupAudio = async () => {
       try {
+        console.log("[AudioPlayer] Setting audio mode");
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
           shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+          interruptionModeIOS: 1,
+          interruptionModeAndroid: 1,
         });
 
+        console.log("[AudioPlayer] Loading audio", { url: guide.audioUrl });
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: guide.audioUrl },
-          { shouldPlay: true },
+          { shouldPlay: false, progressUpdateIntervalMillis: 500 },
           (status: any) => {
-            if (status.isLoaded) {
-              setPosition(status.positionMillis);
-              setDuration(status.durationMillis || guide.duration * 1000);
-              setIsPlaying(status.isPlaying);
+            if (!isMountedRef.current) return;
+            if (status?.isLoaded) {
+              setPosition(status.positionMillis ?? 0);
+              setDuration(status.durationMillis ?? guide.duration * 1000);
+              setIsPlaying(!!status.isPlaying);
               if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
@@ -107,169 +119,247 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           }
         );
 
-        setSound(newSound);
+        soundRef.current = newSound;
         setLoadState("ready");
-        setIsPlaying(true);
       } catch (error) {
-        console.error("Audio load error:", error);
+        console.error("[AudioPlayer] Audio load error:", error);
         setLoadState("error");
       }
     };
 
-    setupAudio();
+    void setupAudio();
 
     return () => {
-      if (sound) {
-        sound.unloadAsync();
+      isMountedRef.current = false;
+      const s = soundRef.current;
+      soundRef.current = null;
+      if (s) {
+        s.stopAsync()
+          .catch((e) => console.error("[AudioPlayer] stopAsync cleanup error", e))
+          .finally(() => {
+            s.unloadAsync().catch((e) => console.error("[AudioPlayer] unloadAsync cleanup error", e));
+          });
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guide.audioUrl, guide.duration]);
+
+  const togglePlayPause = useCallback(async () => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
+      const st = await s.getStatusAsync();
+      if (!st.isLoaded) return;
+
+      if (st.isPlaying) {
+        await s.pauseAsync();
+        setIsPlaying(false);
+      } else {
+        await s.playAsync();
+        setIsPlaying(true);
+      }
+    } catch (e) {
+      console.error("[AudioPlayer] togglePlayPause error", e);
+    }
   }, []);
 
-  const togglePlayPause = async () => {
-    if (!sound) return;
-    if (isPlaying) {
-      await sound.pauseAsync();
-    } else {
-      await sound.playAsync();
-    }
-  };
+  const stopPlayback = useCallback(async () => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
+      const st = await s.getStatusAsync();
+      if (!st.isLoaded) return;
 
-  const handleSeek = async (value: number) => {
-    if (sound) {
-      await sound.setPositionAsync(value);
+      await s.stopAsync();
+      await s.setPositionAsync(0);
+      setPosition(0);
+      setIsPlaying(false);
+    } catch (e) {
+      console.error("[AudioPlayer] stopPlayback error", e);
+    }
+  }, []);
+
+  const handleClose = useCallback(() => {
+    void stopPlayback();
+    onClose();
+  }, [onClose, stopPlayback]);
+
+  const handleSeek = useCallback(async (value: number) => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
+      await s.setPositionAsync(value);
       setPosition(value);
+    } catch (e) {
+      console.error("[AudioPlayer] handleSeek error", e);
     }
-  };
+  }, []);
 
-  const skipForward = async () => {
-    if (sound) {
+  const skipForward = useCallback(async () => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
       const newPos = Math.min(duration, position + 15000);
-      await sound.setPositionAsync(newPos);
+      await s.setPositionAsync(newPos);
+    } catch (e) {
+      console.error("[AudioPlayer] skipForward error", e);
     }
-  };
+  }, [duration, position]);
 
-  const skipBackward = async () => {
-    if (sound) {
+  const skipBackward = useCallback(async () => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
       const newPos = Math.max(0, position - 15000);
-      await sound.setPositionAsync(newPos);
+      await s.setPositionAsync(newPos);
+    } catch (e) {
+      console.error("[AudioPlayer] skipBackward error", e);
     }
-  };
+  }, [position]);
 
-  const changeSpeed = async () => {
-    if (sound) {
+  const changeSpeed = useCallback(async () => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
       const newSpeed = playbackSpeed === 1 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
-      await sound.setRateAsync(newSpeed, true);
+      await s.setRateAsync(newSpeed, true);
       setPlaybackSpeed(newSpeed);
+    } catch (e) {
+      console.error("[AudioPlayer] changeSpeed error", e);
     }
-  };
+  }, [playbackSpeed]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <Animated.View 
-        style={[
-          styles.content, 
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-        ]}
+      <Animated.View
+        style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton} testID="audioPlayerClose">
             <ChevronDown size={28} color={Colors.light.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Now Playing</Text>
-          <View style={{ width: 40 }} /> 
-        </View>
-
-        <View style={styles.artworkContainer}>
-          <Image 
-            source={{ uri: artworkUrl }} 
-            style={styles.artwork} 
-            resizeMode="cover" 
-          />
-        </View>
-
-        <View style={styles.infoContainer}>
-          <Text style={styles.title} numberOfLines={2}>{guide.title}</Text>
-          <Text style={styles.location}>{guide.location || "Audio Tour"}</Text>
-        </View>
-
-        <View style={styles.progressContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={duration}
-            value={position}
-            onSlidingComplete={handleSeek}
-            minimumTrackTintColor={Colors.light.primary}
-            maximumTrackTintColor="#E2E8F0"
-            thumbTintColor={Colors.light.primary}
-          />
-          <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatTime(position)}</Text>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.controlsContainer}>
-          <TouchableOpacity onPress={changeSpeed} style={styles.speedButton}>
-            <Text style={styles.speedText}>{playbackSpeed}x</Text>
+          <TouchableOpacity
+            onPress={stopPlayback}
+            style={styles.headerStopButton}
+            activeOpacity={0.8}
+            testID="audioPlayerStop"
+          >
+            <Square size={22} color={Colors.light.text} />
           </TouchableOpacity>
+        </View>
 
-          <View style={styles.mainControls}>
-            <TouchableOpacity onPress={skipBackward} style={styles.skipButton}>
-              <SkipBack size={28} color={Colors.light.text} />
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          testID="audioPlayerScroll"
+        >
+          <View style={styles.artworkContainer}>
+            <Image source={{ uri: artworkUrl }} style={styles.artwork} resizeMode="cover" />
+          </View>
+
+          <View style={styles.infoContainer}>
+            <Text style={styles.title} numberOfLines={2}>
+              {guide.title}
+            </Text>
+            <Text style={styles.location}>{guide.location || "Audio Tour"}</Text>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={duration}
+              value={position}
+              onSlidingComplete={handleSeek}
+              minimumTrackTintColor={Colors.light.primary}
+              maximumTrackTintColor="#E2E8F0"
+              thumbTintColor={Colors.light.primary}
+              testID="audioPlayerSlider"
+            />
+            <View style={styles.timeRow}>
+              <Text style={styles.timeText}>{formatTime(position)}</Text>
+              <Text style={styles.timeText}>{formatTime(duration)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.controlsContainer}>
+            <TouchableOpacity onPress={changeSpeed} style={styles.speedButton} testID="audioPlayerSpeed">
+              <Text style={styles.speedText}>{playbackSpeed}x</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              onPress={togglePlayPause} 
-              style={styles.playButton}
-              activeOpacity={0.8}
+            <View style={styles.mainControls}>
+              <TouchableOpacity onPress={skipBackward} style={styles.skipButton} testID="audioPlayerBack15">
+                <SkipBack size={28} color={Colors.light.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={togglePlayPause}
+                style={styles.playButton}
+                activeOpacity={0.8}
+                testID="audioPlayerPlayPause"
+              >
+                {loadState === "loading" ? (
+                  <ActivityIndicator color="#fff" />
+                ) : isPlaying ? (
+                  <Pause size={32} color="#fff" fill="#fff" />
+                ) : (
+                  <Play size={32} color="#fff" fill="#fff" style={{ marginLeft: 4 }} />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={skipForward} style={styles.skipButton} testID="audioPlayerFwd15">
+                <SkipForward size={28} color={Colors.light.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ width: 40 }} />
+          </View>
+
+          {guide.chapters && guide.chapters.length > 0 && (
+            <TouchableOpacity
+              style={styles.chaptersButton}
+              onPress={() => setShowChapters((v) => !v)}
+              activeOpacity={0.85}
+              testID="audioPlayerChaptersToggle"
             >
-              {loadState === "loading" ? (
-                <ActivityIndicator color="#fff" />
-              ) : isPlaying ? (
-                <Pause size={32} color="#fff" fill="#fff" />
+              <Text style={styles.chaptersText}>Chapters</Text>
+              {showChapters ? (
+                <ChevronUp size={20} color={Colors.light.primary} />
               ) : (
-                <Play size={32} color="#fff" fill="#fff" style={{ marginLeft: 4 }} />
+                <ChevronDown size={20} color={Colors.light.primary} />
               )}
             </TouchableOpacity>
+          )}
 
-            <TouchableOpacity onPress={skipForward} style={styles.skipButton}>
-              <SkipForward size={28} color={Colors.light.text} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ width: 40 }} /> 
-        </View>
-
-        {guide.chapters && guide.chapters.length > 0 && (
-          <TouchableOpacity 
-            style={styles.chaptersButton}
-            onPress={() => setShowChapters(!showChapters)}
-          >
-            <Text style={styles.chaptersText}>Chapters</Text>
-            {showChapters ? (
-              <ChevronDown size={20} color={Colors.light.primary} />
-            ) : (
-              <ChevronUp size={20} color={Colors.light.primary} />
-            )}
-          </TouchableOpacity>
-        )}
-
-        {showChapters && guide.chapters && (
-          <View style={styles.chaptersList}>
-            {guide.chapters.map((chapter, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.chapterItem}
-                onPress={() => handleSeek(chapter.timestamp * 1000)}
+          {showChapters && guide.chapters && (
+            <View style={styles.chaptersCard} testID="audioPlayerChapters">
+              <ScrollView
+                style={styles.chaptersList}
+                contentContainerStyle={styles.chaptersListContent}
+                showsVerticalScrollIndicator
+                nestedScrollEnabled
               >
-                <Text style={styles.chapterTitle} numberOfLines={1}>{chapter.title}</Text>
-                <Text style={styles.chapterTime}>{formatTime(chapter.timestamp * 1000)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+                {guide.chapters.map((chapter, index) => (
+                  <TouchableOpacity
+                    key={`${chapter.title}-${chapter.timestamp}-${index}`}
+                    style={styles.chapterItem}
+                    onPress={() => handleSeek(chapter.timestamp * 1000)}
+                    activeOpacity={0.85}
+                    testID={`audioPlayerChapter-${index}`}
+                  >
+                    <Text style={styles.chapterTitle} numberOfLines={1}>
+                      {chapter.title}
+                    </Text>
+                    <Text style={styles.chapterTime}>{formatTime(chapter.timestamp * 1000)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
       </Animated.View>
     </SafeAreaView>
   );
@@ -284,12 +374,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 16,
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  headerStopButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,20,25,0.04)",
   },
   closeButton: {
     padding: 8,
@@ -401,29 +505,42 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.light.primary,
   },
+  chaptersCard: {
+    marginTop: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    backgroundColor: "rgba(247,249,250,0.9)",
+    overflow: "hidden",
+  },
   chaptersList: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    flex: 1,
+    maxHeight: 260,
+  },
+  chaptersListContent: {
+    paddingVertical: 4,
   },
   chapterItem: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "rgba(0,0,0,0.06)",
   },
   chapterTitle: {
     fontSize: 15,
     color: Colors.light.text,
-    fontWeight: "500",
+    fontWeight: "700",
     flex: 1,
     marginRight: 16,
   },
   chapterTime: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
     fontVariant: ["tabular-nums"],
+    fontWeight: "700",
   },
+  bottomSpacer: {
+    height: 18,
+  }
 });
