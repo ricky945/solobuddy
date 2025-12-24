@@ -794,6 +794,54 @@ For ${location}, return topics as JSON array:`;
       const topicsToUse = tourType === "landmark" ? selectedLandmarkTopics : selectedTopics;
       const topicsString = topicsToUse.join(", ");
 
+      const getAreaLabelFromCoords = async (coords: { latitude: number; longitude: number }): Promise<string | null> => {
+        try {
+          const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=16&addressdetails=1`;
+          console.log("[Geo] Reverse geocoding area label:", url);
+
+          const resp = await fetch(url, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+            },
+          });
+
+          if (!resp.ok) {
+            console.log("[Geo] Reverse geocode failed:", resp.status);
+            return null;
+          }
+
+          const data: unknown = await resp.json();
+          const address = (data as any)?.address as Record<string, unknown> | undefined;
+
+          const neighbourhood = (address?.neighbourhood as string | undefined) ?? (address?.quarter as string | undefined);
+          const cityDistrict = (address?.city_district as string | undefined) ?? (address?.borough as string | undefined);
+          const suburb = (address?.suburb as string | undefined);
+          const city = (address?.city as string | undefined) ?? (address?.town as string | undefined) ?? (address?.village as string | undefined);
+          const region = (address?.state as string | undefined) ?? (address?.region as string | undefined);
+          const country = address?.country as string | undefined;
+
+          const areaBits = [neighbourhood, cityDistrict, suburb, city].filter(Boolean);
+          const primary = areaBits[0];
+
+          const labelParts = [primary, city, region, country].filter((v, i, arr) => {
+            if (!v) return false;
+            if (i > 0 && v === arr[i - 1]) return false;
+            return true;
+          });
+
+          const label = labelParts.join(", ").trim();
+          console.log("[Geo] Area label:", label || null);
+          return label.length > 0 ? label : null;
+        } catch (e) {
+          console.error("[Geo] Reverse geocode error:", e);
+          return null;
+        }
+      };
+
+      const areaLabel = locationCoords ? await getAreaLabelFromCoords(locationCoords) : null;
+      const areaLine = areaLabel ? `Right now, you are in ${areaLabel}.` : "";
+
       const systemPrompt = tourType === "landmark" 
         ? `=== LANDMARK AUDIO TOUR GENERATION SYSTEM ===
 
@@ -831,6 +879,7 @@ You are a world-class museum guide and historian creating an in-depth, engaging 
 - Duration: ${audioLength} minutes
 - Selected Topics: ${topicsString}
 - Current Season: ${season} (${currentMonth} ${currentYear})
+${areaLine ? `- Listener context: ${areaLine}` : ""}
 
 === CRITICAL RULES ===
 
@@ -885,7 +934,8 @@ You are a world-class travel guide creating immersive audio tours. Your narratio
 
 3. THE TOUR (CORE CONTENT)
    - Each stop/segment should: (a) name the place/area, (b) give a story, (c) drop one high-impact data point (if relevant), (d) connect back to the user's interests.
-   - For route tours: stops must be realistic and reachable via ${transportMethod}.
+   - For immersive tours: you may explicitly anchor the listener in a specific neighborhood/area ("Right now you're in...") when relevant and when shifting areas.
+   - For route tours: stops must be realistic and reachable via ${transportMethod}. Keep stops clustered; prefer nearby landmarks rather than jumping across the city.
 
 4. OUTRO (FINAL 30 SECONDS)
    - One memorable takeaway tied to the user's interests + a final "where to next" suggestion.
@@ -897,6 +947,7 @@ You are a world-class travel guide creating immersive audio tours. Your narratio
 - Topics (user interests): ${topicsString}
 - Type: ${tourType === "route" ? "Route with navigation" : "Immersive listening"}
 - Current Season: ${season} (${currentMonth} ${currentYear})
+${areaLine ? `- Listener context: ${areaLine}` : ""}
 ${tourType === "route" ? `- Transport: ${transportMethod}` : ""}
 
 === CRITICAL RULES ===
@@ -933,7 +984,11 @@ Return JSON with:
 - title: Catchy title
 - description: 2-3 sentence description  
 - script: Full detailed spoken script for a ${audioLength}-minute audio tour (~${audioLength * 150} words). Write it as if you're the narrator speaking directly to the listener. Include an engaging introduction, detailed information about each topic, interesting stories and facts, and a memorable conclusion. Make it flow naturally as spoken narration.
-${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real landmarks near ${location} with {name, description, coordinates: {latitude, longitude}, timestamp}. These should be actual places reachable via ${transportMethod}.\n- famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}\n- hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
+${tourType === "route" ? `- landmarks: Array of ${maxLandmarksForTime} real landmarks near ${location} with {name, description, coordinates: {latitude, longitude}, timestamp}. These should be actual places reachable via ${transportMethod}.
+- proximityRules: Keep landmarks in the same general area; avoid cross-city jumps. Prefer nearby, walkable clusters.
+${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude}, longitude: ${locationCoords.longitude} } (use ONLY for choosing nearby places; do NOT speak or print the numbers)` : ""}
+- famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}
+- hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
 
       console.log("[Tour Generation] Calling AI...");
 
