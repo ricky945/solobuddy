@@ -259,13 +259,13 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
       if (s) {
         s.getStatusAsync()
           .then((st) => {
-            if (st.isLoaded) {
-              return s.stopAsync();
+            if (st.isLoaded && st.isPlaying) {
+              return s.pauseAsync().catch(() => {});
             }
           })
-          .catch((e) => console.error("[AudioPlayer] stopAsync cleanup error", e))
+          .catch(() => {})
           .finally(() => {
-            s.unloadAsync().catch((e) => console.error("[AudioPlayer] unloadAsync cleanup error", e));
+            s.unloadAsync().catch(() => {});
           });
       }
     };
