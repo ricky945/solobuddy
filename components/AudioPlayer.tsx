@@ -167,14 +167,22 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
     if (!s) return;
     try {
       const st = await s.getStatusAsync();
-      if (!st.isLoaded) return;
+      if (!st.isLoaded) {
+        setIsPlaying(false);
+        setPosition(0);
+        return;
+      }
 
-      await s.stopAsync();
+      if (st.isPlaying) {
+        await s.pauseAsync();
+      }
       await s.setPositionAsync(0);
       setPosition(0);
       setIsPlaying(false);
     } catch (e) {
       console.error("[AudioPlayer] stopPlayback error", e);
+      setIsPlaying(false);
+      setPosition(0);
     }
   }, []);
 
