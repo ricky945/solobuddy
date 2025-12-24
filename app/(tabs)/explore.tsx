@@ -121,6 +121,13 @@ export default function ExploreScreen() {
 
   const activeQuery = activeTab === "touristic" ? touristicDiscoverQuery : uniqueLandmarksQuery;
 
+  // Add robust error logging
+  useEffect(() => {
+    if (activeQuery.error) {
+      console.error(`[Explore] ${activeTab} query failed:`, activeQuery.error);
+    }
+  }, [activeQuery.error, activeTab]);
+
   useEffect(() => {
     if (!location) return;
 

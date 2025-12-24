@@ -9,7 +9,8 @@ const app = new Hono();
 console.log("[Backend] Starting Hono server v1.3.4 - Backend active");
 console.log("[Backend] Environment:", {
   nodeEnv: process.env.NODE_ENV,
-  hasOpenAI: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY
+  hasOpenAI: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+  hasGooglePlaces: !!process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY
 });
 
 app.use("*", cors());
@@ -52,15 +53,46 @@ app.use("/api/trpc/*", async (c, next) => {
 });
 
 // tRPC Handler
-app.all("/api/trpc/:path+", (c) => {
+app.all("/api/trpc/*", (c) => {
+  // Use Hono's parsed path for reliability and normalize it
+  const pathname = c.req.path.replace(/\/+/g, '/');
+  
+  console.log(`[tRPC Debug] Request URL: ${c.req.url}`);
+  console.log(`[tRPC Debug] Normalized Pathname: ${pathname}`);
+  
+  // Determine the correct endpoint to strip based on the actual path
+  // This fixes issues where proxies might strip parts of the path
+  let endpoint = "/api/trpc";
+  
+  // Dynamic endpoint detection: find the /trpc segment
+  // This handles /api/trpc, /trpc, or any other prefix ending in /trpc
+  const trpcSegment = "/trpc";
+  const trpcIndex = pathname.indexOf(trpcSegment);
+  
+  if (trpcIndex !== -1) {
+    // The endpoint is everything from the start up to and including /trpc
+    endpoint = pathname.substring(0, trpcIndex + trpcSegment.length);
+  } else if (pathname.includes("/api/trpc")) {
+     // Fallback for cases where /trpc might be part of /api/trpc string but something else matches
+     endpoint = "/api/trpc";
+  }
+  
+  console.log(`[tRPC Debug] Using endpoint: ${endpoint}`);
+  
   return fetchRequestHandler({
-    endpoint: "/api/trpc",
+    endpoint,
     req: c.req.raw,
     router: appRouter,
     createContext,
     onError({ error, path }) {
       console.error(`[tRPC] Error on ${path}:`, error);
-      console.error("[tRPC] Error details:", JSON.stringify(error, null, 2));
+      // Detailed error logging to catch path mismatches
+      if (error.code === 'NOT_FOUND') {
+        console.error(`[tRPC] Path resolution failed. Router has keys: ${Object.keys(appRouter._def.procedures).join(', ') || 'unknown'}`);
+        console.error(`[tRPC] Attempted path: ${path}`);
+        console.error(`[tRPC] Configured endpoint: ${endpoint}`);
+        console.error(`[tRPC] Request URL: ${c.req.url}`);
+      }
     },
   });
 });

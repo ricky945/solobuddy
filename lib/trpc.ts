@@ -264,6 +264,12 @@ export const trpcClient = trpc.createClient({
             
             if (response.status === 404) {
               console.error('[tRPC] 404 Error - Full URL:', urlString);
+              console.error('[tRPC] Endpoint not found. Request headers:', JSON.stringify(options?.headers || {}));
+              
+              // Helper for debugging Rork/Hono path issues
+              const urlObj = new URL(urlString);
+              console.error('[tRPC] Path components:', urlObj.pathname.split('/'));
+              
               console.error('[tRPC] Backend may not be deployed or endpoint is incorrect');
               if (!isTRPCError) {
                 errorMessage = 'Backend endpoint not found. The backend may not be deployed yet. Please wait a moment and try again.';
