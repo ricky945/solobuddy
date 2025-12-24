@@ -32,8 +32,11 @@ interface AudioPlayerProps {
 
 type LoadState = "loading" | "ready" | "error";
 
-function formatTime(milliseconds: number) {
-  const totalSeconds = Math.floor(milliseconds / 1000);
+function formatTime(milliseconds: number | null | undefined) {
+  const ms = typeof milliseconds === "number" ? milliseconds : NaN;
+  if (!Number.isFinite(ms) || ms < 0) return "--:--";
+
+  const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -57,7 +60,9 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(Math.max(0, guide.duration * 1000));
+  const [duration, setDuration] = useState<number | null>(
+    Number.isFinite(guide.duration) && guide.duration > 0 ? guide.duration * 1000 : null
+  );
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [showChapters, setShowChapters] = useState<boolean>(false);
@@ -108,8 +113,20 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           (status: any) => {
             if (!isMountedRef.current) return;
             if (status?.isLoaded) {
-              setPosition(status.positionMillis ?? 0);
-              setDuration(status.durationMillis ?? guide.duration * 1000);
+              const nextPosition = typeof status.positionMillis === "number" ? status.positionMillis : 0;
+              setPosition(nextPosition);
+
+              const nextDurationCandidate: unknown =
+                typeof status.durationMillis === "number"
+                  ? status.durationMillis
+                  : typeof status.playableDurationMillis === "number"
+                    ? status.playableDurationMillis
+                    : null;
+
+              if (typeof nextDurationCandidate === "number" && Number.isFinite(nextDurationCandidate) && nextDurationCandidate > 0) {
+                setDuration(nextDurationCandidate);
+              }
+
               setIsPlaying(!!status.isPlaying);
               if (status.didJustFinish) {
                 setIsPlaying(false);
@@ -195,6 +212,8 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
     const s = soundRef.current;
     if (!s) return;
     try {
+      const st = await s.getStatusAsync();
+      if (!st.isLoaded) return;
       await s.setPositionAsync(value);
       setPosition(value);
     } catch (e) {
@@ -202,11 +221,27 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
     }
   }, []);
 
+  const handleSeekAndPlay = useCallback(async (value: number) => {
+    const s = soundRef.current;
+    if (!s) return;
+    try {
+      const st = await s.getStatusAsync();
+      if (!st.isLoaded) return;
+      await s.setPositionAsync(value);
+      setPosition(value);
+      await s.playAsync();
+      setIsPlaying(true);
+    } catch (e) {
+      console.error("[AudioPlayer] handleSeekAndPlay error", e);
+    }
+  }, []);
+
   const skipForward = useCallback(async () => {
     const s = soundRef.current;
     if (!s) return;
     try {
-      const newPos = Math.min(duration, position + 15000);
+      const dur = duration ?? position + 15000;
+      const newPos = Math.min(dur, position + 15000);
       await s.setPositionAsync(newPos);
     } catch (e) {
       console.error("[AudioPlayer] skipForward error", e);
@@ -277,7 +312,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
             <Slider
               style={styles.slider}
               minimumValue={0}
-              maximumValue={duration}
+              maximumValue={Math.max(1, duration ?? 1)}
               value={position}
               onSlidingComplete={handleSeek}
               minimumTrackTintColor={Colors.light.primary}
@@ -348,20 +383,40 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                 showsVerticalScrollIndicator
                 nestedScrollEnabled
               >
-                {guide.chapters.map((chapter, index) => (
-                  <TouchableOpacity
-                    key={`${chapter.title}-${chapter.timestamp}-${index}`}
-                    style={styles.chapterItem}
-                    onPress={() => handleSeek(chapter.timestamp * 1000)}
-                    activeOpacity={0.85}
-                    testID={`audioPlayerChapter-${index}`}
-                  >
-                    <Text style={styles.chapterTitle} numberOfLines={1}>
-                      {chapter.title}
-                    </Text>
-                    <Text style={styles.chapterTime}>{formatTime(chapter.timestamp * 1000)}</Text>
-                  </TouchableOpacity>
-                ))}
+                {guide.chapters.map((chapter, index) => {
+                  const nextStart = guide.chapters?.[index + 1]?.timestamp;
+                  const inferredDurationSeconds =
+                    typeof nextStart === "number" && Number.isFinite(nextStart)
+                      ? Math.max(0, nextStart - chapter.timestamp)
+                      : typeof duration === "number" && Number.isFinite(duration)
+                        ? Math.max(0, Math.floor(duration / 1000) - chapter.timestamp)
+                        : null;
+
+                  const displayDurationSeconds =
+                    Number.isFinite(chapter.duration) && chapter.duration > 0
+                      ? chapter.duration
+                      : inferredDurationSeconds;
+
+                  return (
+                    <TouchableOpacity
+                      key={`${chapter.title}-${chapter.timestamp}-${index}`}
+                      style={styles.chapterItem}
+                      onPress={() => handleSeekAndPlay(chapter.timestamp * 1000)}
+                      activeOpacity={0.85}
+                      testID={`audioPlayerChapter-${index}`}
+                    >
+                      <View style={styles.chapterTextBlock}>
+                        <Text style={styles.chapterTitle} numberOfLines={1}>
+                          {chapter.title}
+                        </Text>
+                        <Text style={styles.chapterSub}>
+                          Start {formatTime(chapter.timestamp * 1000)}
+                        </Text>
+                      </View>
+                      <Text style={styles.chapterTime}>{formatTime((displayDurationSeconds ?? 0) * 1000)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </View>
           )}
@@ -535,12 +590,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,0,0,0.06)",
   },
+  chapterTextBlock: {
+    flex: 1,
+    marginRight: 16,
+  },
   chapterTitle: {
     fontSize: 15,
     color: Colors.light.text,
     fontWeight: "700",
-    flex: 1,
-    marginRight: 16,
+  },
+  chapterSub: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontWeight: "600",
+    marginTop: 3,
+    fontVariant: ["tabular-nums"],
   },
   chapterTime: {
     fontSize: 13,
