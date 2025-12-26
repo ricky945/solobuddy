@@ -56,7 +56,7 @@ app.use("/trpc/*", async (c, next) => {
 app.use(
   "/trpc/*",
   trpcServer({
-    endpoint: "/trpc",
+    endpoint: "/api/trpc",
     router: appRouter,
     createContext,
     onError({ error, path }) {
