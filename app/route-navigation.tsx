@@ -230,6 +230,7 @@ export default function RouteNavigationScreen() {
         {
           shouldPlay: true,
           positionMillis: landmark.audioTimestamp * 1000,
+          isLooping: false,
         }
       );
       
@@ -239,8 +240,12 @@ export default function RouteNavigationScreen() {
       setIsPlaying(true);
 
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && !status.isPlaying && status.didJustFinish) {
-          setIsPlaying(false);
+        if (status.isLoaded) {
+          setIsPlaying(!!status.isPlaying);
+          if (status.didJustFinish) {
+            console.log("[RouteNav] Audio finished playing at this landmark");
+            setIsPlaying(false);
+          }
         }
       });
     } catch (error) {

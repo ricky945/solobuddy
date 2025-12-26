@@ -205,15 +205,20 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           interruptionModeAndroid: 1,
         });
 
-        console.log("[AudioPlayer] Loading audio", {
+        console.log("[AudioPlayer] Loading audio for lock screen playback", {
           originalUrl: guide.audioUrl,
           resolvedAudioUri,
           isCached,
+          expectedDuration: guide.duration,
         });
 
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: resolvedAudioUri },
-          { shouldPlay: false, progressUpdateIntervalMillis: 500 },
+          { 
+            shouldPlay: false, 
+            progressUpdateIntervalMillis: 500,
+            isLooping: false,
+          },
           (status: any) => {
             if (!isMountedRef.current) return;
             if (status?.isLoaded) {
@@ -233,8 +238,8 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
               setIsPlaying(!!status.isPlaying);
               if (status.didJustFinish) {
+                console.log("[AudioPlayer] Playback finished");
                 setIsPlaying(false);
-                setPosition(0);
               }
             } else if (status?.error) {
               console.log("[AudioPlayer] Playback status error", status.error);
@@ -269,7 +274,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           });
       }
     };
-  }, [guide.audioUrl, isCached, resolvedAudioUri]);
+  }, [guide.audioUrl, guide.duration, isCached, resolvedAudioUri]);
 
   const togglePlayPause = useCallback(async () => {
     const s = soundRef.current;
@@ -496,18 +501,22 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               >
                 {guide.chapters.map((chapter, index) => {
                   const nextChapter = guide.chapters?.[index + 1];
-                  const nextTimestamp = nextChapter?.timestamp;
-                  const totalDurationSeconds = duration ? Math.floor(duration / 1000) : 0;
+                  const totalDurationSeconds = duration && Number.isFinite(duration) ? Math.floor(duration / 1000) : 0;
                   
                   let chapterDurationSeconds = 0;
                   
                   if (typeof chapter.duration === "number" && chapter.duration > 0) {
                     chapterDurationSeconds = chapter.duration;
-                  } else if (typeof nextTimestamp === "number") {
-                    chapterDurationSeconds = Math.max(0, nextTimestamp - chapter.timestamp);
-                  } else if (totalDurationSeconds > 0) {
+                  } else if (nextChapter && typeof nextChapter.timestamp === "number") {
+                    chapterDurationSeconds = Math.max(0, nextChapter.timestamp - chapter.timestamp);
+                  } else if (totalDurationSeconds > chapter.timestamp) {
                     chapterDurationSeconds = Math.max(0, totalDurationSeconds - chapter.timestamp);
+                  } else {
+                    chapterDurationSeconds = 60;
                   }
+
+                  const chapterDurationMs = chapterDurationSeconds * 1000;
+                  const isValidDuration = Number.isFinite(chapterDurationMs) && chapterDurationMs > 0;
 
                   return (
                     <TouchableOpacity
@@ -525,7 +534,9 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                           Start {formatTime(chapter.timestamp * 1000)}
                         </Text>
                       </View>
-                      <Text style={styles.chapterTime}>{formatTime(chapterDurationSeconds * 1000)}</Text>
+                      <Text style={styles.chapterTime}>
+                        {isValidDuration ? formatTime(chapterDurationMs) : "--:--"}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}

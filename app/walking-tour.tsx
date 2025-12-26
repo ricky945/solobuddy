@@ -288,12 +288,17 @@ export default function WalkingTourScreen() {
     try {
       const { sound: s } = await Audio.Sound.createAsync(
         { uri: tour.audioUrl },
-        { shouldPlay: false }
+        { 
+          shouldPlay: false,
+          isLooping: false,
+        }
       );
 
       s.setOnPlaybackStatusUpdate((st) => {
         if (!st.isLoaded) return;
+        setIsPlaying(!!st.isPlaying);
         if (st.didJustFinish) {
+          console.log("[WalkingTour] Audio finished playing");
           setIsPlaying(false);
         }
       });
