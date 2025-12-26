@@ -29,11 +29,18 @@ export interface TourConfig {
   createdAt: number;
 }
 
+export interface AudioSegment {
+  uri: string;
+  startTime: number;
+  duration: number;
+}
+
 export interface AudioGuide extends TourConfig {
   title: string;
   description: string;
   script?: string;
   audioUrl: string;
+  audioSegments?: AudioSegment[];
   duration: number;
   thumbnailUrl?: string;
   landmarks?: Landmark[];

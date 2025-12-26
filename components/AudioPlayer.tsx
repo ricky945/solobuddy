@@ -25,7 +25,7 @@ import Slider from "@react-native-community/slider";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
-import { AudioGuide } from "@/types";
+import type { AudioGuide, AudioSegment } from "@/types";
 
 interface AudioPlayerProps {
   guide: AudioGuide;
@@ -48,9 +48,7 @@ function formatTime(milliseconds: number | null | undefined) {
   const seconds = totalSeconds % 60;
 
   if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
@@ -115,6 +113,7 @@ async function resolvePlayableAudioUri(audioUrl: string): Promise<CachedAudioRes
     if (!resp.ok) {
       throw new Error(`Download failed: ${resp.status}`);
     }
+
     const arrayBuffer = await resp.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     await (file as any).write(bytes);
@@ -126,23 +125,48 @@ async function resolvePlayableAudioUri(audioUrl: string): Promise<CachedAudioRes
   }
 }
 
+function getGlobalDurationMs(guide: AudioGuide): number {
+  if (typeof guide.duration === "number" && Number.isFinite(guide.duration) && guide.duration > 0) {
+    return Math.floor(guide.duration * 1000);
+  }
+  return 60_000;
+}
+
+function buildSegments(guide: AudioGuide): AudioSegment[] {
+  const segs = guide.audioSegments;
+  if (Array.isArray(segs) && segs.length > 0) {
+    const cleaned = segs
+      .filter((s) => !!s?.uri && typeof s.startTime === "number" && typeof s.duration === "number")
+      .map((s) => ({ uri: String(s.uri), startTime: s.startTime, duration: s.duration }))
+      .sort((a, b) => a.startTime - b.startTime);
+
+    if (cleaned.length > 0) return cleaned;
+  }
+
+  return [{ uri: guide.audioUrl, startTime: 0, duration: Math.max(1, Math.round(guide.duration ?? 60)) }];
+}
+
 export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const segmentIndexRef = useRef<number>(0);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
-  const [duration, setDuration] = useState<number | null>(
-    typeof guide.duration === "number" && guide.duration > 0 ? guide.duration * 1000 : null
-  );
+  const [duration, setDuration] = useState<number>(() => getGlobalDurationMs(guide));
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [showChapters, setShowChapters] = useState<boolean>(false);
-  const [resolvedAudioUri, setResolvedAudioUri] = useState<string>(guide.audioUrl);
-  const [isCached, setIsCached] = useState<boolean>(false);
+  const [segmentIndex, setSegmentIndex] = useState<number>(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+
+  const segments = useMemo<AudioSegment[]>(() => buildSegments(guide), [guide]);
+
+  useEffect(() => {
+    setDuration(getGlobalDurationMs(guide));
+  }, [guide]);
 
   useEffect(() => {
     Animated.parallel([
@@ -165,29 +189,127 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
     return buildUnsplashArtworkUrl(guide.title, guide.location || "");
   }, [guide.location, guide.thumbnailUrl, guide.title]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const resolve = async () => {
-      try {
-        const result = await resolvePlayableAudioUri(guide.audioUrl);
-        if (cancelled) return;
-        setResolvedAudioUri(result.uri);
-        setIsCached(!!result.local);
-        console.log("[AudioPlayer] Resolved audio URI", result);
-      } catch (e) {
-        console.log("[AudioPlayer] resolvePlayableAudioUri error", e);
-        if (!cancelled) {
-          setResolvedAudioUri(guide.audioUrl);
-          setIsCached(false);
+  const getSegmentIndexForGlobalMs = useCallback(
+    (globalMs: number) => {
+      const t = Math.max(0, Math.floor(globalMs / 1000));
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (t >= segments[i].startTime) return i;
+      }
+      return 0;
+    },
+    [segments]
+  );
+
+  const getSegmentLocalMs = useCallback(
+    (segIdx: number, globalMs: number) => {
+      const seg = segments[segIdx];
+      if (!seg) return globalMs;
+      const local = globalMs - seg.startTime * 1000;
+      return Math.max(0, local);
+    },
+    [segments]
+  );
+
+  const loadSegment = useCallback(
+    async (nextIndex: number, opts?: { shouldPlay?: boolean; globalPositionMs?: number }) => {
+      const prev = soundRef.current;
+      soundRef.current = null;
+
+      if (prev) {
+        try {
+          await prev.stopAsync();
+        } catch (e) {
+          console.log("[AudioPlayer] stopAsync cleanup error", e);
+        }
+        try {
+          await prev.unloadAsync();
+        } catch (e) {
+          console.log("[AudioPlayer] unloadAsync cleanup error", e);
         }
       }
-    };
 
-    void resolve();
-    return () => {
-      cancelled = true;
-    };
-  }, [guide.audioUrl]);
+      const seg = segments[nextIndex];
+      if (!seg?.uri) {
+        console.log("[AudioPlayer] Missing segment", { nextIndex, segments: segments.length });
+        setLoadState("error");
+        return;
+      }
+
+      setLoadState("loading");
+      setSegmentIndex(nextIndex);
+      segmentIndexRef.current = nextIndex;
+
+      const desiredGlobalMs = opts?.globalPositionMs ?? seg.startTime * 1000;
+      const localMs = getSegmentLocalMs(nextIndex, desiredGlobalMs);
+
+      console.log("[AudioPlayer] Loading segment", {
+        nextIndex,
+        uri: seg.uri,
+        localMs,
+        desiredGlobalMs,
+      });
+
+      const resolved = await resolvePlayableAudioUri(seg.uri);
+      if (!isMountedRef.current) return;
+
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: resolved.uri },
+        {
+          shouldPlay: false,
+          progressUpdateIntervalMillis: 500,
+          isLooping: false,
+          positionMillis: Math.max(0, Math.floor(localMs)),
+        },
+        (status: any) => {
+          if (!isMountedRef.current) return;
+
+          if (status?.isLoaded) {
+            const localPos = typeof status.positionMillis === "number" ? status.positionMillis : 0;
+            const segIdx = segmentIndexRef.current;
+            const segNow = segments[segIdx];
+            const globalPos = (segNow?.startTime ?? 0) * 1000 + localPos;
+
+            setPosition(globalPos);
+            setIsPlaying(!!status.isPlaying);
+
+            if (status.didJustFinish) {
+              const next = segIdx + 1;
+              if (next < segments.length) {
+                console.log("[AudioPlayer] Segment finished, advancing", { segIdx, next });
+                void loadSegment(next, { shouldPlay: true, globalPositionMs: segments[next].startTime * 1000 });
+              } else {
+                console.log("[AudioPlayer] Playback finished");
+                setIsPlaying(false);
+              }
+            }
+          } else if (status?.error) {
+            console.log("[AudioPlayer] Playback status error", status.error);
+          }
+        }
+      );
+
+      soundRef.current = newSound;
+
+      try {
+        await newSound.setRateAsync(playbackSpeed, true);
+      } catch (e) {
+        console.log("[AudioPlayer] setRateAsync error", e);
+      }
+
+      setLoadState("ready");
+
+      if (opts?.shouldPlay) {
+        try {
+          await newSound.playAsync();
+          setIsPlaying(true);
+        } catch (e) {
+          console.error("[AudioPlayer] playAsync after loadSegment error", e);
+        }
+      }
+    },
+    [getSegmentLocalMs, playbackSpeed, segments]
+  );
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -205,50 +327,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           interruptionModeAndroid: 1,
         });
 
-        console.log("[AudioPlayer] Loading audio for lock screen playback", {
-          originalUrl: guide.audioUrl,
-          resolvedAudioUri,
-          isCached,
-          expectedDuration: guide.duration,
-        });
-
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: resolvedAudioUri },
-          { 
-            shouldPlay: false, 
-            progressUpdateIntervalMillis: 500,
-            isLooping: false,
-          },
-          (status: any) => {
-            if (!isMountedRef.current) return;
-            if (status?.isLoaded) {
-              const nextPosition = typeof status.positionMillis === "number" ? status.positionMillis : 0;
-              setPosition(nextPosition);
-
-              const nextDurationCandidate: unknown =
-                typeof status.durationMillis === "number" ? status.durationMillis : null;
-
-              if (
-                typeof nextDurationCandidate === "number" &&
-                Number.isFinite(nextDurationCandidate) &&
-                nextDurationCandidate > 0
-              ) {
-                setDuration(nextDurationCandidate);
-              }
-
-              setIsPlaying(!!status.isPlaying);
-              if (status.didJustFinish) {
-                console.log("[AudioPlayer] Playback finished");
-                setIsPlaying(false);
-              }
-            } else if (status?.error) {
-              console.log("[AudioPlayer] Playback status error", status.error);
-            }
-          }
-        );
-
-        soundRef.current = newSound;
-        setLoadState("ready");
+        await loadSegment(0, { shouldPlay: false, globalPositionMs: 0 });
       } catch (error) {
         console.error("[AudioPlayer] Audio load error:", error);
         setLoadState("error");
@@ -274,11 +353,12 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           });
       }
     };
-  }, [guide.audioUrl, guide.duration, isCached, resolvedAudioUri]);
+  }, [loadSegment]);
 
   const togglePlayPause = useCallback(async () => {
     const s = soundRef.current;
     if (!s) return;
+
     try {
       const st = await s.getStatusAsync();
       if (!st.isLoaded) return;
@@ -296,102 +376,79 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, []);
 
   const stopPlayback = useCallback(async () => {
-    const s = soundRef.current;
-    if (!s) return;
-    try {
-      const st = await s.getStatusAsync();
-      if (!st.isLoaded) {
-        setIsPlaying(false);
-        setPosition(0);
-        return;
-      }
+    setIsPlaying(false);
+    setPosition(0);
+    setSegmentIndex(0);
+    segmentIndexRef.current = 0;
 
-      if (st.isPlaying) {
-        await s.pauseAsync();
-      }
-      await s.setPositionAsync(0);
-      setPosition(0);
-      setIsPlaying(false);
+    try {
+      await loadSegment(0, { shouldPlay: false, globalPositionMs: 0 });
     } catch (e) {
       console.error("[AudioPlayer] stopPlayback error", e);
-      setIsPlaying(false);
-      setPosition(0);
     }
-  }, []);
+  }, [loadSegment]);
 
   const handleClose = useCallback(() => {
     void stopPlayback();
     onClose();
   }, [onClose, stopPlayback]);
 
-  const handleSeek = useCallback(async (value: number) => {
-    const s = soundRef.current;
-    if (!s) return;
-    try {
-      const st = await s.getStatusAsync();
-      if (!st.isLoaded) return;
-      await s.setPositionAsync(value);
+  const handleSeek = useCallback(
+    async (value: number) => {
+      const targetIdx = getSegmentIndexForGlobalMs(value);
+      await loadSegment(targetIdx, { shouldPlay: false, globalPositionMs: value });
       setPosition(value);
-    } catch (e) {
-      console.error("[AudioPlayer] handleSeek error", e);
-    }
-  }, []);
+    },
+    [getSegmentIndexForGlobalMs, loadSegment]
+  );
 
-  const handleSeekAndPlay = useCallback(async (value: number) => {
-    const s = soundRef.current;
-    if (!s) return;
-    try {
-      const st = await s.getStatusAsync();
-      if (!st.isLoaded) return;
-      await s.setPositionAsync(value);
+  const handleSeekAndPlay = useCallback(
+    async (value: number) => {
+      const targetIdx = getSegmentIndexForGlobalMs(value);
+      await loadSegment(targetIdx, { shouldPlay: true, globalPositionMs: value });
       setPosition(value);
-      await s.playAsync();
       setIsPlaying(true);
-    } catch (e) {
-      console.error("[AudioPlayer] handleSeekAndPlay error", e);
-    }
-  }, []);
+    },
+    [getSegmentIndexForGlobalMs, loadSegment]
+  );
 
   const skipForward = useCallback(async () => {
-    const s = soundRef.current;
-    if (!s) return;
     try {
       const dur = duration ?? position + 15000;
       const newPos = Math.min(dur, position + 15000);
-      await s.setPositionAsync(newPos);
+      await handleSeekAndPlay(newPos);
     } catch (e) {
       console.error("[AudioPlayer] skipForward error", e);
     }
-  }, [duration, position]);
+  }, [duration, handleSeekAndPlay, position]);
 
   const skipBackward = useCallback(async () => {
-    const s = soundRef.current;
-    if (!s) return;
     try {
       const newPos = Math.max(0, position - 15000);
-      await s.setPositionAsync(newPos);
+      await handleSeekAndPlay(newPos);
     } catch (e) {
       console.error("[AudioPlayer] skipBackward error", e);
     }
-  }, [position]);
+  }, [handleSeekAndPlay, position]);
 
   const changeSpeed = useCallback(async () => {
     const s = soundRef.current;
-    if (!s) return;
     try {
       const newSpeed = playbackSpeed === 1 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
-      await s.setRateAsync(newSpeed, true);
       setPlaybackSpeed(newSpeed);
+      if (s) {
+        await s.setRateAsync(newSpeed, true);
+      }
     } catch (e) {
       console.error("[AudioPlayer] changeSpeed error", e);
     }
   }, [playbackSpeed]);
 
+  const chapterItems = guide.chapters ?? [];
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <Animated.View
-        style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
-      >
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton} testID="audioPlayerClose">
             <ChevronDown size={28} color={Colors.light.text} />
@@ -440,6 +497,14 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               <Text style={styles.timeText}>{formatTime(position)}</Text>
               <Text style={styles.timeText}>{formatTime(duration)}</Text>
             </View>
+
+            {segments.length > 1 && (
+              <View style={styles.segmentHintRow} testID="audioPlayerSegmentHint">
+                <Text style={styles.segmentHintText}>
+                  Playing part {segmentIndex + 1} of {segments.length}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.controlsContainer}>
@@ -475,7 +540,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
             <View style={{ width: 40 }} />
           </View>
 
-          {guide.chapters && guide.chapters.length > 0 && (
+          {chapterItems.length > 0 && (
             <TouchableOpacity
               style={styles.chaptersButton}
               onPress={() => setShowChapters((v) => !v)}
@@ -491,7 +556,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
             </TouchableOpacity>
           )}
 
-          {showChapters && guide.chapters && (
+          {showChapters && chapterItems.length > 0 && (
             <View style={styles.chaptersCard} testID="audioPlayerChapters">
               <ScrollView
                 style={styles.chaptersList}
@@ -499,12 +564,12 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                 showsVerticalScrollIndicator
                 nestedScrollEnabled
               >
-                {guide.chapters.map((chapter, index) => {
-                  const nextChapter = guide.chapters?.[index + 1];
-                  const totalDurationSeconds = duration && Number.isFinite(duration) ? Math.floor(duration / 1000) : 0;
-                  
+                {chapterItems.map((chapter, index) => {
+                  const nextChapter = chapterItems[index + 1];
+                  const totalDurationSeconds = Math.floor((duration ?? 0) / 1000);
+
                   let chapterDurationSeconds = 0;
-                  
+
                   if (typeof chapter.duration === "number" && chapter.duration > 0) {
                     chapterDurationSeconds = chapter.duration;
                   } else if (nextChapter && typeof nextChapter.timestamp === "number") {
@@ -530,13 +595,9 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                         <Text style={styles.chapterTitle} numberOfLines={1}>
                           {chapter.title}
                         </Text>
-                        <Text style={styles.chapterSub}>
-                          Start {formatTime(chapter.timestamp * 1000)}
-                        </Text>
+                        <Text style={styles.chapterSub}>Start {formatTime(chapter.timestamp * 1000)}</Text>
                       </View>
-                      <Text style={styles.chapterTime}>
-                        {isValidDuration ? formatTime(chapterDurationMs) : "--:--"}
-                      </Text>
+                      <Text style={styles.chapterTime}>{isValidDuration ? formatTime(chapterDurationMs) : "--:--"}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -642,6 +703,15 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     fontVariant: ["tabular-nums"],
   },
+  segmentHintRow: {
+    marginTop: 10,
+    alignItems: "center",
+  },
+  segmentHintText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontWeight: "600",
+  },
   controlsContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -737,5 +807,5 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 18,
-  }
+  },
 });

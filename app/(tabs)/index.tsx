@@ -1085,17 +1085,6 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       const OPENAI_TTS_VOICE = "alloy" as const;
       const OPENAI_TTS_SPEED = 1.0 as const;
 
-      const concatUint8Arrays = (parts: Uint8Array[]): Uint8Array => {
-        const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
-        const out = new Uint8Array(total);
-        let offset = 0;
-        for (const p of parts) {
-          out.set(p, offset);
-          offset += p.byteLength;
-        }
-        return out;
-      };
-
       const generateTTSBuffer = async (text: string, attempt = 0): Promise<Uint8Array> => {
         const apiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || "").toString().trim();
         if (!apiKey) {
@@ -1175,7 +1164,28 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
         const chunks = splitIntoChunks(audioScript, { minChars: 900, maxChars: 3800 });
         console.log(`[Tour Generation] Split script into ${chunks.length} chunk(s)`);
 
-        const buffers: Uint8Array[] = [];
+        if (chunks.length === 0) {
+          throw new Error("No audio chunks produced from script");
+        }
+
+        const segmentUris: string[] = [];
+
+        const totalChars = chunks.reduce((sum, c) => sum + c.length, 0);
+        const totalSeconds = audioLength * 60;
+        const segmentTimes: { startTime: number; duration: number }[] = [];
+        let tCursor = 0;
+
+        for (let i = 0; i < chunks.length; i++) {
+          const ratio = totalChars > 0 ? chunks[i].length / totalChars : 1 / chunks.length;
+          const dur = Math.max(5, Math.round(totalSeconds * ratio));
+          segmentTimes.push({ startTime: tCursor, duration: dur });
+          tCursor += dur;
+        }
+
+        if (segmentTimes.length > 0) {
+          const last = segmentTimes[segmentTimes.length - 1];
+          last.duration = Math.max(5, totalSeconds - last.startTime);
+        }
 
         for (let i = 0; i < chunks.length; i++) {
           if (!isMounted) {
@@ -1185,29 +1195,32 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
 
           console.log(`[Tour Generation] TTS chunk ${i + 1}/${chunks.length}`);
           const bytes = await generateTTSBuffer(chunks[i]);
-          buffers.push(bytes);
+
+          if (Platform.OS === "web") {
+            const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+            const blob = new Blob([arrayBuffer as ArrayBuffer], { type: "audio/mpeg" });
+            const uri = URL.createObjectURL(blob);
+            segmentUris.push(uri);
+          } else {
+            const file = new File(Paths.cache, `tour_${tourId}_${i}.mp3`);
+            await file.create({ overwrite: true });
+            await (file as any).write(bytes);
+            segmentUris.push(file.uri);
+          }
         }
 
-        const finalBytes = concatUint8Arrays(buffers);
-        console.log("[Tour Generation] Final audio bytes:", finalBytes.byteLength);
+        audioUrl = segmentUris[0] || "";
 
-        if (Platform.OS === "web") {
-          const arrayBuffer = finalBytes.buffer.slice(
-            finalBytes.byteOffset,
-            finalBytes.byteOffset + finalBytes.byteLength
-          );
-          const blob = new Blob([arrayBuffer as ArrayBuffer], { type: "audio/mpeg" });
-          audioUrl = URL.createObjectURL(blob);
-          console.log("[Tour Generation] Web audio blob URL created");
-        } else {
-          const file = new File(Paths.cache, `tour_${tourId}.mp3`);
-          file.create({ overwrite: true });
-          file.write(finalBytes);
-          audioUrl = file.uri;
-          console.log("[Tour Generation] Native audio file saved:", file.uri);
-        }
+        console.log("[Tour Generation] Audio generation complete", {
+          segments: segmentUris.length,
+          firstUri: audioUrl,
+        });
 
-        console.log("[Tour Generation] Audio generation complete");
+        (generatedContent as any).__audioSegments = segmentUris.map((uri, idx) => ({
+          uri,
+          startTime: segmentTimes[idx]?.startTime ?? 0,
+          duration: segmentTimes[idx]?.duration ?? Math.floor((audioLength * 60) / Math.max(1, segmentUris.length)),
+        }));
       } catch (ttsError: any) {
         console.error("[Tour Generation] TTS failed:", ttsError?.message || ttsError);
 
@@ -1279,6 +1292,15 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
         audioLength,
         transportMethod: tourType === "route" ? transportMethod : undefined,
         audioUrl,
+        audioSegments: Array.isArray((generatedContent as any).__audioSegments)
+          ? ((generatedContent as any).__audioSegments as any[])
+              .map((s) => ({
+                uri: String(s?.uri || ""),
+                startTime: typeof s?.startTime === "number" ? s.startTime : 0,
+                duration: typeof s?.duration === "number" ? s.duration : 0,
+              }))
+              .filter((s) => !!s.uri && s.duration > 0)
+          : undefined,
         duration: audioLength * 60,
         landmarks,
         chapters,
