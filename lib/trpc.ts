@@ -203,7 +203,7 @@ async function fetchWithRetry(
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/trpc`,
+      url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
         const urlString = typeof url === 'string' ? url : url.toString();
