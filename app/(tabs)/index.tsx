@@ -723,24 +723,40 @@ For ${location}, return topics as JSON array:`;
       console.log("[Network Check] Testing connectivity...");
       
       const toolkitUrl = process.env.EXPO_PUBLIC_TOOLKIT_URL;
+      console.log("[Network Check] Toolkit URL:", toolkitUrl ? `${toolkitUrl.substring(0, 30)}...` : 'NOT SET');
+      
       if (!toolkitUrl) {
-        console.error("[Network Check] No toolkit URL configured");
+        console.error("[Network Check] EXPO_PUBLIC_TOOLKIT_URL is not configured!");
+        Alert.alert(
+          "Configuration Error",
+          "The AI service URL is not configured. Please contact support."
+        );
         return false;
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
+      console.log("[Network Check] Fetching:", `${toolkitUrl}/health`);
       const response = await fetch(`${toolkitUrl}/health`, {
         method: 'GET',
         signal: controller.signal,
       });
       
       clearTimeout(timeoutId);
-      console.log("[Network Check] Toolkit health check status:", response.status);
+      console.log("[Network Check] Response status:", response.status);
+      console.log("[Network Check] Response ok:", response.ok);
+      
       return response.ok;
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Network Check] Failed:", error);
+      console.error("[Network Check] Error message:", error?.message);
+      console.error("[Network Check] Error name:", error?.name);
+      
+      if (error?.name === 'AbortError') {
+        console.error("[Network Check] Request timed out");
+      }
+      
       return false;
     }
   };
@@ -996,7 +1012,11 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
 - famousLandmarkRecommendation: OPTIONAL - If there is a world-famous landmark (like Sagrada Familia in Barcelona or Eiffel Tower in Paris) that exists in this city but is far from the user's current location coordinates, include: {name, reason, estimatedDistance}
 - hasFewLandmarks: OPTIONAL - Boolean true if this area has very few actual landmarks (less than ${maxLandmarksForTime}) and you'd recommend an immersive tour instead` : "- chapters: Array of chapters with {title, timestamp, duration}"}`;
 
-      console.log("[Tour Generation] Calling AI...");
+      console.log("[Tour Generation] Preparing to call AI...");
+      console.log("[Tour Generation] Toolkit URL check:", process.env.EXPO_PUBLIC_TOOLKIT_URL ? 'SET' : 'NOT SET');
+      console.log("[Tour Generation] Platform:", Platform.OS);
+      console.log("[Tour Generation] System prompt length:", systemPrompt.length);
+      console.log("[Tour Generation] User message length:", userMessage.length);
 
       let response: string | undefined;
       let retryCount = 0;
@@ -1005,31 +1025,45 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       while (retryCount < maxRetries) {
         try {
           console.log(`[Tour Generation] AI call attempt ${retryCount + 1}/${maxRetries}`);
+          console.log(`[Tour Generation] Calling generateText...`);
           
+          const startTime = Date.now();
           response = await generateText({
             messages: [
               { role: "user", content: systemPrompt + "\n\n" + userMessage },
             ],
           });
+          const duration = Date.now() - startTime;
           
           console.log("[Tour Generation] AI response received successfully");
+          console.log("[Tour Generation] Response time:", duration, "ms");
+          console.log("[Tour Generation] Response length:", response?.length || 0);
           break;
         } catch (aiError: any) {
           console.error(`[Tour Generation] AI call attempt ${retryCount + 1} failed:`, aiError);
+          console.error(`[Tour Generation] Error type:`, typeof aiError);
+          console.error(`[Tour Generation] Error name:`, aiError?.name || 'Unknown');
           console.error(`[Tour Generation] Error message:`, aiError?.message || 'Unknown');
+          console.error(`[Tour Generation] Error cause:`, aiError?.cause || 'None');
           console.error(`[Tour Generation] Error stack:`, aiError?.stack || 'No stack');
+          
+          if (aiError?.cause) {
+            console.error(`[Tour Generation] Error cause details:`, JSON.stringify(aiError.cause, null, 2));
+          }
           
           retryCount++;
           if (retryCount >= maxRetries) {
             const errorMsg = String(aiError?.message || aiError || '').toLowerCase();
+            console.error(`[Tour Generation] All retries exhausted. Final error:`, errorMsg);
             
-            if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch')) {
+            if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch') || errorMsg.includes('fetch failed')) {
               throw new Error(
-                "Network connection failed. This usually means:\n\n" +
-                "1. Your internet connection is unstable\n" +
-                "2. You're on a restricted network (try mobile data)\n" +
-                "3. The AI service is temporarily unavailable\n\n" +
-                "Please check your connection and try again."
+                "Unable to connect to AI service. Please try:\n\n" +
+                "1. Check your internet connection\n" +
+                "2. If on WiFi, try switching to mobile data\n" +
+                "3. If on mobile data, try switching to WiFi\n" +
+                "4. Wait a moment and try again\n\n" +
+                "If the problem persists, the service may be temporarily unavailable."
               );
             } else if (errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
               throw new Error(
@@ -1037,7 +1071,7 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
               );
             } else {
               throw new Error(
-                `Failed to generate tour: ${aiError?.message || 'Unknown error'}. Please try again.`
+                `AI generation failed: ${aiError?.message || 'Unknown error'}. Please try again.`
               );
             }
           }
