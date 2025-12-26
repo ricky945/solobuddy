@@ -718,7 +718,7 @@ For ${location}, return topics as JSON array:`;
 
 
 
-  const checkNetworkConnectivity = async (): Promise<boolean> => {
+  const checkNetworkConnectivity = async (): Promise<{ success: boolean; error?: string }> => {
     try {
       console.log("[Network Check] Testing connectivity...");
       
@@ -727,27 +727,36 @@ For ${location}, return topics as JSON array:`;
       
       if (!toolkitUrl) {
         console.error("[Network Check] EXPO_PUBLIC_TOOLKIT_URL is not configured!");
-        Alert.alert(
-          "Configuration Error",
-          "The AI service URL is not configured. Please contact support."
-        );
-        return false;
+        return { 
+          success: false, 
+          error: "AI service URL is not configured. Please contact support."
+        };
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       
       console.log("[Network Check] Fetching:", `${toolkitUrl}/health`);
       const response = await fetch(`${toolkitUrl}/health`, {
         method: 'GET',
         signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
       });
       
       clearTimeout(timeoutId);
       console.log("[Network Check] Response status:", response.status);
       console.log("[Network Check] Response ok:", response.ok);
       
-      return response.ok;
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: `AI service returned error: ${response.status}. Please try again.`
+        };
+      }
+      
+      return { success: true };
     } catch (error: any) {
       console.error("[Network Check] Failed:", error);
       console.error("[Network Check] Error message:", error?.message);
@@ -755,9 +764,24 @@ For ${location}, return topics as JSON array:`;
       
       if (error?.name === 'AbortError') {
         console.error("[Network Check] Request timed out");
+        return { 
+          success: false, 
+          error: "Connection timeout. The network is too slow or the service is unavailable."
+        };
       }
       
-      return false;
+      const errorMsg = String(error?.message || '').toLowerCase();
+      if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch')) {
+        return { 
+          success: false, 
+          error: "Cannot connect to AI service. Please check your internet connection.\n\nTry:\n• Switching between WiFi and mobile data\n• Disabling VPN or proxy\n• Checking if you have internet access"
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: `Connection test failed: ${error?.message || 'Unknown error'}`
+      };
     }
   };
 
@@ -788,16 +812,18 @@ For ${location}, return topics as JSON array:`;
     }
 
     console.log("[Tour Generation] Checking network connectivity...");
-    const isConnected = await checkNetworkConnectivity();
+    const connectivityCheck = await checkNetworkConnectivity();
     
-    if (!isConnected) {
+    if (!connectivityCheck.success) {
       Alert.alert(
         "Connection Error",
-        "Cannot connect to the server. Please check your internet connection and try again.",
+        connectivityCheck.error || "Cannot connect to the AI service. Please check your internet connection and try again.",
         [{ text: "OK" }]
       );
       return;
     }
+    
+    console.log("[Tour Generation] Network connectivity check passed");
 
     goToNextStep("generating");
     console.log("[Tour Generation] Starting...");
@@ -1021,11 +1047,14 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       let response: string | undefined;
       let retryCount = 0;
       const maxRetries = 3;
+      let lastError: any = null;
       
       while (retryCount < maxRetries) {
         try {
           console.log(`[Tour Generation] AI call attempt ${retryCount + 1}/${maxRetries}`);
           console.log(`[Tour Generation] Calling generateText...`);
+          console.log(`[Tour Generation] Platform:`, Platform.OS);
+          console.log(`[Tour Generation] Toolkit URL exists:`, !!process.env.EXPO_PUBLIC_TOOLKIT_URL);
           
           const startTime = Date.now();
           response = await generateText({
@@ -1038,52 +1067,73 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
           console.log("[Tour Generation] AI response received successfully");
           console.log("[Tour Generation] Response time:", duration, "ms");
           console.log("[Tour Generation] Response length:", response?.length || 0);
+          lastError = null;
           break;
         } catch (aiError: any) {
+          lastError = aiError;
           console.error(`[Tour Generation] AI call attempt ${retryCount + 1} failed:`, aiError);
           console.error(`[Tour Generation] Error type:`, typeof aiError);
           console.error(`[Tour Generation] Error name:`, aiError?.name || 'Unknown');
           console.error(`[Tour Generation] Error message:`, aiError?.message || 'Unknown');
           console.error(`[Tour Generation] Error cause:`, aiError?.cause || 'None');
-          console.error(`[Tour Generation] Error stack:`, aiError?.stack || 'No stack');
-          
-          if (aiError?.cause) {
-            console.error(`[Tour Generation] Error cause details:`, JSON.stringify(aiError.cause, null, 2));
-          }
           
           retryCount++;
-          if (retryCount >= maxRetries) {
-            const errorMsg = String(aiError?.message || aiError || '').toLowerCase();
-            console.error(`[Tour Generation] All retries exhausted. Final error:`, errorMsg);
+          
+          if (retryCount < maxRetries) {
+            const delayMs = 1000 * Math.pow(2, retryCount - 1);
+            console.log(`[Tour Generation] Retrying after ${delayMs}ms... (${retryCount}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
             
-            if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch') || errorMsg.includes('fetch failed')) {
+            if (!isMounted) {
+              console.log("[Tour Generation] Component unmounted during retry");
+              return;
+            }
+            
+            const recheckResult = await checkNetworkConnectivity();
+            if (!recheckResult.success) {
+              console.error("[Tour Generation] Network recheck failed:", recheckResult.error);
               throw new Error(
-                "Unable to connect to AI service. Please try:\n\n" +
-                "1. Check your internet connection\n" +
-                "2. If on WiFi, try switching to mobile data\n" +
-                "3. If on mobile data, try switching to WiFi\n" +
-                "4. Wait a moment and try again\n\n" +
-                "If the problem persists, the service may be temporarily unavailable."
-              );
-            } else if (errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
-              throw new Error(
-                "Request timed out. Try selecting a shorter tour duration (20 minutes) or fewer topics."
-              );
-            } else {
-              throw new Error(
-                `AI generation failed: ${aiError?.message || 'Unknown error'}. Please try again.`
+                recheckResult.error || "Connection lost during generation. Please check your internet and try again."
               );
             }
           }
-          
-          const delayMs = Math.min(2000 * Math.pow(2, retryCount - 1), 5000);
-          console.log(`[Tour Generation] Retrying after ${delayMs}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-          
-          if (!isMounted) {
-            console.log("[Tour Generation] Component unmounted during retry");
-            return;
-          }
+        }
+      }
+      
+      if (lastError && !response) {
+        const errorMsg = String(lastError?.message || lastError || '').toLowerCase();
+        console.error(`[Tour Generation] All retries exhausted. Final error:`, errorMsg);
+        
+        if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch') || errorMsg.includes('fetch failed')) {
+          throw new Error(
+            "Network connection failed during AI generation.\n\n" +
+            "Troubleshooting steps:\n" +
+            "1. Check your internet connection\n" +
+            "2. Try switching between WiFi and mobile data\n" +
+            "3. Disable VPN or proxy if enabled\n" +
+            "4. Try a shorter tour (20 min) with fewer topics\n\n" +
+            "If the problem persists, the AI service may be temporarily unavailable."
+          );
+        } else if (errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
+          throw new Error(
+            "Request timed out. The tour generation took too long.\n\n" +
+            "Try:\n" +
+            "• Selecting a shorter duration (20 minutes)\n" +
+            "• Choosing fewer topics (1-2)\n" +
+            "• Ensuring you have a stable internet connection"
+          );
+        } else if (errorMsg.includes('400') || errorMsg.includes('bad request')) {
+          throw new Error(
+            "Invalid request. Please try:\n" +
+            "• Using a different location name\n" +
+            "• Selecting different topics\n" +
+            "• Trying again in a moment"
+          );
+        } else {
+          throw new Error(
+            `AI generation failed: ${lastError?.message || 'Unknown error'}.\n\n` +
+            "Please try again. If this persists, try a simpler tour with fewer topics."
+          );
         }
       }
 
