@@ -721,22 +721,23 @@ For ${location}, return topics as JSON array:`;
   const checkNetworkConnectivity = async (): Promise<boolean> => {
     try {
       console.log("[Network Check] Testing connectivity...");
-      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-      if (!baseUrl) {
-        console.error("[Network Check] No base URL configured");
+      
+      const toolkitUrl = process.env.EXPO_PUBLIC_TOOLKIT_URL;
+      if (!toolkitUrl) {
+        console.error("[Network Check] No toolkit URL configured");
         return false;
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       
-      const response = await fetch(`${baseUrl}/api/health`, {
+      const response = await fetch(`${toolkitUrl}/health`, {
         method: 'GET',
         signal: controller.signal,
       });
       
       clearTimeout(timeoutId);
-      console.log("[Network Check] Health check status:", response.status);
+      console.log("[Network Check] Toolkit health check status:", response.status);
       return response.ok;
     } catch (error) {
       console.error("[Network Check] Failed:", error);
@@ -1002,12 +1003,8 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       const maxRetries = 3;
       
       while (retryCount < maxRetries) {
-        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
           console.log(`[Tour Generation] AI call attempt ${retryCount + 1}/${maxRetries}`);
-          
-          const controller = new AbortController();
-          timeoutId = setTimeout(() => controller.abort(), 60000);
           
           response = await generateText({
             messages: [
@@ -1015,21 +1012,37 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
             ],
           });
           
-          clearTimeout(timeoutId);
           console.log("[Tour Generation] AI response received successfully");
           break;
         } catch (aiError: any) {
-          if (timeoutId) clearTimeout(timeoutId);
           console.error(`[Tour Generation] AI call attempt ${retryCount + 1} failed:`, aiError);
+          console.error(`[Tour Generation] Error message:`, aiError?.message || 'Unknown');
+          console.error(`[Tour Generation] Error stack:`, aiError?.stack || 'No stack');
           
           retryCount++;
           if (retryCount >= maxRetries) {
-            throw new Error(
-              "Failed to generate tour content after multiple attempts. Please check your internet connection and try again. If you're on mobile, try switching between WiFi and cellular data."
-            );
+            const errorMsg = String(aiError?.message || aiError || '').toLowerCase();
+            
+            if (errorMsg.includes('network request failed') || errorMsg.includes('failed to fetch')) {
+              throw new Error(
+                "Network connection failed. This usually means:\n\n" +
+                "1. Your internet connection is unstable\n" +
+                "2. You're on a restricted network (try mobile data)\n" +
+                "3. The AI service is temporarily unavailable\n\n" +
+                "Please check your connection and try again."
+              );
+            } else if (errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
+              throw new Error(
+                "Request timed out. Try selecting a shorter tour duration (20 minutes) or fewer topics."
+              );
+            } else {
+              throw new Error(
+                `Failed to generate tour: ${aiError?.message || 'Unknown error'}. Please try again.`
+              );
+            }
           }
           
-          const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+          const delayMs = Math.min(2000 * Math.pow(2, retryCount - 1), 5000);
           console.log(`[Tour Generation] Retrying after ${delayMs}ms...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           
@@ -1356,14 +1369,14 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       const lowerMsg = errorMessage.toLowerCase();
       let userMessage = errorMessage;
       
-      if (lowerMsg.includes('network request failed')) {
-        userMessage = "Network connection failed. Please check your internet connection and try again. If you're on mobile, try switching between WiFi and cellular data.";
-      } else if (lowerMsg.includes('cannot reach backend')) {
-        userMessage = "Cannot connect to the server. Please check your internet connection and try again.";
+      if (lowerMsg.includes('network request failed') || lowerMsg.includes('failed to fetch')) {
+        userMessage = "Network connection failed.\n\nTroubleshooting steps:\n1. Check your internet connection\n2. Try switching between WiFi and mobile data\n3. Disable any VPN or proxy\n4. Try a shorter tour (20 min) with fewer topics\n\nIf this persists, the AI service may be temporarily unavailable.";
+      } else if (lowerMsg.includes('cannot reach') || lowerMsg.includes('cannot connect')) {
+        userMessage = "Cannot connect to the AI service. Please check your internet connection and try again.";
       } else if (lowerMsg.includes('network') || lowerMsg.includes('connection')) {
-        userMessage = "Network error occurred. Please check your connection and try again. If the problem persists, try restarting the app.";
-      } else if (lowerMsg.includes('timeout')) {
-        userMessage = "Request timed out. The server may be busy. Please try again in a moment or choose a shorter tour duration.";
+        userMessage = "Network error. Please check your connection and try again. If using a restricted network, try mobile data.";
+      } else if (lowerMsg.includes('timeout') || lowerMsg.includes('aborted')) {
+        userMessage = "Request timed out. Try a shorter tour duration (20 minutes) or fewer topics.";
       }
       
       Alert.alert(
