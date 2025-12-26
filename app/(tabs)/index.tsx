@@ -1188,7 +1188,7 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
           throw new Error("OpenAI API key not configured");
         }
 
-        const sanitized = sanitizeTextForTTS(text);
+        const sanitized = sanitizeTextForTTS(text, 3400);
         if (!sanitized || sanitized.length < 10) {
           throw new Error("Text too short or invalid after sanitization");
         }
@@ -1196,7 +1196,7 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
         console.log(`[TTS] Requesting OpenAI audio (${sanitized.length} chars), attempt ${attempt + 1}`);
 
         const controller = new AbortController();
-        const timeoutMs = 90000;
+        const timeoutMs = 180000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
@@ -1258,7 +1258,7 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       try {
         console.log("[Tour Generation] Generating TTS audio (client-direct)...");
 
-        const chunks = splitIntoChunks(audioScript, { minChars: 900, maxChars: 3800 });
+        const chunks = splitIntoChunks(audioScript, { minChars: 900, maxChars: 3400 });
         console.log(`[Tour Generation] Split script into ${chunks.length} chunk(s)`);
 
         if (chunks.length === 0) {
@@ -1299,7 +1299,12 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
             const uri = URL.createObjectURL(blob);
             segmentUris.push(uri);
           } else {
-            const file = new File(Paths.cache, `tour_${tourId}_${i}.mp3`);
+            const dir = new File(Paths.document, `tts/tours/${tourId}`);
+            try {
+              await dir.create({ intermediates: true });
+            } catch {}
+
+            const file = new File(Paths.document, `tts/tours/${tourId}/segment_${i}.mp3`);
             await file.create({ overwrite: true });
             await (file as any).write(bytes);
             segmentUris.push(file.uri);

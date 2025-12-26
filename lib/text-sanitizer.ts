@@ -1,4 +1,4 @@
-export function sanitizeTextForTTS(text: string): string {
+export function sanitizeTextForTTS(text: string, maxLength = 1400): string {
   if (!text) return '';
   
   let cleaned = text
@@ -35,8 +35,8 @@ export function sanitizeTextForTTS(text: string): string {
     .replace(/\.{4,}/g, '...')
     .trim();
   
-  if (cleaned.length > 1400) {
-    cleaned = cleaned.substring(0, 1400);
+  if (Number.isFinite(maxLength) && maxLength > 0 && cleaned.length > maxLength) {
+    cleaned = cleaned.substring(0, maxLength);
   }
   
   return cleaned;
@@ -84,13 +84,13 @@ export function splitIntoChunks(
   text: string,
   maxCharsOrOptions: number | SplitChunksOptions = { minChars: 200, maxChars: 300 },
 ): string[] {
-  const sanitized = sanitizeTextForTTS(text);
-
   const options: SplitChunksOptions =
     typeof maxCharsOrOptions === "number" ? { maxChars: maxCharsOrOptions } : maxCharsOrOptions;
 
   const minChars = options.minChars ?? 200;
   const maxChars = options.maxChars ?? 300;
+
+  const sanitized = sanitizeTextForTTS(text, Math.max(1400, maxChars));
   const minWords = options.minWords;
   const maxWords = options.maxWords;
 

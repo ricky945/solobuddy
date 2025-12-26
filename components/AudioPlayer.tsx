@@ -327,9 +327,10 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
         setLoadState("loading");
         console.log("[AudioPlayer] Setting audio mode");
         await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
-          shouldDuckAndroid: false,
+          shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
           interruptionModeIOS: 1,
           interruptionModeAndroid: 1,

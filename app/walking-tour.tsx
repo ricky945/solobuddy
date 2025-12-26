@@ -68,7 +68,9 @@ export default function WalkingTourScreen() {
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string>("");
 
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const segmentIndexRef = useRef<number>(0);
+
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
 
@@ -147,9 +149,10 @@ export default function WalkingTourScreen() {
       try {
         console.log("[WalkingTour] Setting audio mode");
         await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
-          shouldDuckAndroid: false,
+          shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
           interruptionModeIOS: 1,
           interruptionModeAndroid: 1,
@@ -159,16 +162,18 @@ export default function WalkingTourScreen() {
       }
     };
 
-    setupAudio();
+    void setupAudio();
   }, []);
 
   useEffect(() => {
     return () => {
-      if (sound) {
-        sound.unloadAsync().catch((e) => console.error("[WalkingTour] unload sound error", e));
+      const s = soundRef.current;
+      soundRef.current = null;
+      if (s) {
+        s.unloadAsync().catch((e) => console.error("[WalkingTour] unload sound error", e));
       }
     };
-  }, [sound]);
+  }, []);
 
   const requestLocation = useCallback(async () => {
     setIsLocating(true);
@@ -267,49 +272,135 @@ export default function WalkingTourScreen() {
   }, []);
 
   const stopAudio = useCallback(async () => {
-    if (!sound) return;
+    const s = soundRef.current;
+    if (!s) return;
     try {
-      await sound.stopAsync();
+      await s.stopAsync();
     } catch (e) {
       console.error("[WalkingTour] stop audio error", e);
     } finally {
       setIsPlaying(false);
     }
-  }, [sound]);
+  }, []);
 
-  const ensureSound = useCallback(async () => {
-    if (!tour?.audioUrl) {
-      throw new Error("Missing audio");
+  const segments = useMemo(() => {
+    const segs = tour?.audioSegments;
+    if (Array.isArray(segs) && segs.length > 0) {
+      const cleaned = segs
+        .filter((s) => !!s?.uri && typeof s.startTime === "number" && typeof s.duration === "number")
+        .map((s) => ({ uri: String(s.uri), startTime: s.startTime, duration: s.duration }))
+        .sort((a, b) => a.startTime - b.startTime);
+      if (cleaned.length > 0) return cleaned;
     }
+    if (tour?.audioUrl) {
+      return [{ uri: tour.audioUrl, startTime: 0, duration: Math.max(1, Math.round(tour.duration ?? 60)) }];
+    }
+    return [] as { uri: string; startTime: number; duration: number }[];
+  }, [tour?.audioSegments, tour?.audioUrl, tour?.duration]);
 
-    if (sound) return sound;
+  const getSegmentIndexForGlobalMs = useCallback(
+    (globalMs: number) => {
+      const t = Math.max(0, Math.floor(globalMs / 1000));
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (t >= segments[i].startTime) return i;
+      }
+      return 0;
+    },
+    [segments]
+  );
 
-    setIsAudioLoading(true);
+  const getSegmentLocalMs = useCallback(
+    (segIdx: number, globalMs: number) => {
+      const seg = segments[segIdx];
+      if (!seg) return globalMs;
+      const local = globalMs - seg.startTime * 1000;
+      return Math.max(0, local);
+    },
+    [segments]
+  );
+
+  const unloadSound = useCallback(async () => {
+    const s = soundRef.current;
+    soundRef.current = null;
+    if (!s) return;
     try {
-      const { sound: s } = await Audio.Sound.createAsync(
-        { uri: tour.audioUrl },
-        { 
-          shouldPlay: false,
-          isLooping: false,
-          progressUpdateIntervalMillis: 500,
-        }
-      );
+      await s.stopAsync();
+    } catch {}
+    try {
+      await s.unloadAsync();
+    } catch {}
+  }, []);
 
-      s.setOnPlaybackStatusUpdate((st) => {
-        if (!st.isLoaded) return;
-        setIsPlaying(!!st.isPlaying);
-        if (st.didJustFinish) {
-          console.log("[WalkingTour] Audio finished playing");
-          setIsPlaying(false);
-        }
+  const loadSegment = useCallback(
+    async (nextIndex: number, opts?: { shouldPlay?: boolean; globalPositionMs?: number }) => {
+      if (segments.length === 0) throw new Error("Missing audio");
+      const seg = segments[nextIndex];
+      if (!seg?.uri) throw new Error("Missing audio segment");
+
+      await unloadSound();
+
+      setIsAudioLoading(true);
+      segmentIndexRef.current = nextIndex;
+
+      const desiredGlobalMs = opts?.globalPositionMs ?? seg.startTime * 1000;
+      const localMs = getSegmentLocalMs(nextIndex, desiredGlobalMs);
+
+      console.log("[WalkingTour] Loading segment", {
+        nextIndex,
+        uri: seg.uri,
+        desiredGlobalMs,
+        localMs,
       });
 
-      setSound(s);
-      return s;
-    } finally {
-      setIsAudioLoading(false);
-    }
-  }, [sound, tour?.audioUrl]);
+      try {
+        const { sound: s } = await Audio.Sound.createAsync(
+          { uri: seg.uri },
+          {
+            shouldPlay: false,
+            isLooping: false,
+            progressUpdateIntervalMillis: 500,
+            positionMillis: Math.max(0, Math.floor(localMs)),
+          }
+        );
+
+        s.setOnPlaybackStatusUpdate((st) => {
+          if (!st.isLoaded) return;
+          setIsPlaying(!!st.isPlaying);
+
+          if (st.didJustFinish) {
+            const idx = segmentIndexRef.current;
+            const next = idx + 1;
+            if (next < segments.length) {
+              console.log("[WalkingTour] Segment finished, advancing", { idx, next });
+              void loadSegment(next, { shouldPlay: true, globalPositionMs: segments[next].startTime * 1000 });
+            } else {
+              console.log("[WalkingTour] Audio finished playing");
+              setIsPlaying(false);
+            }
+          }
+        });
+
+        soundRef.current = s;
+        setIsAudioLoading(false);
+
+        if (opts?.shouldPlay) {
+          void s.playAsync().catch((e) => console.error("[WalkingTour] playAsync error", e));
+        }
+      } catch (e) {
+        setIsAudioLoading(false);
+        throw e;
+      }
+    },
+    [getSegmentLocalMs, segments, unloadSound]
+  );
+
+  const ensureSound = useCallback(async () => {
+    const s = soundRef.current;
+    if (s) return s;
+    await loadSegment(0, { shouldPlay: false, globalPositionMs: 0 });
+    if (!soundRef.current) throw new Error("Failed to load audio");
+    return soundRef.current;
+  }, [loadSegment]);
 
   const onTogglePlay = useCallback(async () => {
     if (!currentLandmark) return;
@@ -324,10 +415,19 @@ export default function WalkingTourScreen() {
         return;
       }
 
+      const posMs = Math.max(0, Math.floor(currentLandmark.audioTimestamp * 1000));
+      const targetIdx = getSegmentIndexForGlobalMs(posMs);
+
+      if (segmentIndexRef.current !== targetIdx || !soundRef.current) {
+        await loadSegment(targetIdx, { shouldPlay: true, globalPositionMs: posMs });
+        setIsPlaying(true);
+        return;
+      }
+
       if (status.isLoaded) {
-        const posMs = Math.max(0, Math.floor(currentLandmark.audioTimestamp * 1000));
-        console.log("[WalkingTour] Seeking to position", { posMs, timestamp: currentLandmark.audioTimestamp });
-        await s.setPositionAsync(posMs);
+        const localMs = getSegmentLocalMs(targetIdx, posMs);
+        console.log("[WalkingTour] Seeking within segment", { posMs, localMs, targetIdx });
+        await s.setPositionAsync(localMs);
         await s.playAsync();
         setIsPlaying(true);
       }
@@ -335,7 +435,7 @@ export default function WalkingTourScreen() {
       console.error("[WalkingTour] play/pause error", e);
       Alert.alert("Audio Error", "Couldn't play this stop.");
     }
-  }, [currentLandmark, ensureSound]);
+  }, [currentLandmark, ensureSound, getSegmentIndexForGlobalMs, getSegmentLocalMs, loadSegment]);
 
   const onNextStop = useCallback(async () => {
     if (!tour) return;
