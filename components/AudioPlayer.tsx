@@ -146,10 +146,16 @@ function buildSegments(guide: AudioGuide): AudioSegment[] {
   return [{ uri: guide.audioUrl, startTime: 0, duration: Math.max(1, Math.round(guide.duration ?? 60)) }];
 }
 
+function hasMultipleSegments(guide: AudioGuide): boolean {
+  const segs = guide.audioSegments;
+  return Array.isArray(segs) && segs.length > 1 && segs.some((s) => !!s?.uri);
+}
+
 export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const isMountedRef = useRef<boolean>(true);
   const segmentIndexRef = useRef<number>(0);
+  const actualDurationRef = useRef<number>(0);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
@@ -163,9 +169,12 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   const segments = useMemo<AudioSegment[]>(() => buildSegments(guide), [guide]);
+  const useSegmentMode = useMemo<boolean>(() => hasMultipleSegments(guide), [guide]);
 
   useEffect(() => {
-    setDuration(getGlobalDurationMs(guide));
+    const dur = getGlobalDurationMs(guide);
+    setDuration(dur);
+    actualDurationRef.current = dur;
   }, [guide]);
 
   useEffect(() => {
@@ -272,6 +281,14 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
             setPosition(globalPos);
             setIsPlaying(!!status.isPlaying);
+
+            if (typeof status.durationMillis === "number" && status.durationMillis > 0) {
+              const actualDur = status.durationMillis;
+              if (actualDurationRef.current !== actualDur) {
+                actualDurationRef.current = actualDur;
+                setDuration(actualDur);
+              }
+            }
 
             if (status.didJustFinish) {
               const next = segIdx + 1;
@@ -498,7 +515,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               <Text style={styles.timeText}>{formatTime(duration)}</Text>
             </View>
 
-            {segments.length > 1 && (
+            {useSegmentMode && segments.length > 1 && (
               <View style={styles.segmentHintRow} testID="audioPlayerSegmentHint">
                 <Text style={styles.segmentHintText}>
                   Playing part {segmentIndex + 1} of {segments.length}
@@ -566,7 +583,8 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               >
                 {chapterItems.map((chapter, index) => {
                   const nextChapter = chapterItems[index + 1];
-                  const totalDurationSeconds = Math.floor((duration ?? 0) / 1000);
+                  const actualDur = actualDurationRef.current || duration || 0;
+                  const totalDurationSeconds = Math.floor(actualDur / 1000);
 
                   let chapterDurationSeconds = 0;
 
@@ -577,7 +595,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
                   } else if (totalDurationSeconds > chapter.timestamp) {
                     chapterDurationSeconds = Math.max(0, totalDurationSeconds - chapter.timestamp);
                   } else {
-                    chapterDurationSeconds = 60;
+                    chapterDurationSeconds = 0;
                   }
 
                   const chapterDurationMs = chapterDurationSeconds * 1000;

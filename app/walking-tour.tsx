@@ -291,6 +291,7 @@ export default function WalkingTourScreen() {
         { 
           shouldPlay: false,
           isLooping: false,
+          progressUpdateIntervalMillis: 500,
         }
       );
 
@@ -325,6 +326,7 @@ export default function WalkingTourScreen() {
 
       if (status.isLoaded) {
         const posMs = Math.max(0, Math.floor(currentLandmark.audioTimestamp * 1000));
+        console.log("[WalkingTour] Seeking to position", { posMs, timestamp: currentLandmark.audioTimestamp });
         await s.setPositionAsync(posMs);
         await s.playAsync();
         setIsPlaying(true);
