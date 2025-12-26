@@ -52,11 +52,11 @@ app.use("/trpc/*", async (c, next) => {
   }
 });
 
-// tRPC Handler - mounted at /trpc, will be available at /api/trpc
+// tRPC Handler - mounted at /trpc
 app.use(
   "/trpc/*",
   trpcServer({
-    endpoint: "/api/trpc",
+    endpoint: "/trpc",
     router: appRouter,
     createContext,
     onError({ error, path }) {
