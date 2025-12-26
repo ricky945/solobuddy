@@ -30,14 +30,14 @@ app.get("/health", (c) => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     routes: {
-      trpc: "/api/trpc",
+      trpc: "/trpc",
       available: true
     }
   });
 });
 
 // Logging middleware for tRPC
-app.use("/api/trpc/*", async (c, next) => {
+app.use("/trpc/*", async (c, next) => {
   const startTime = Date.now();
   const path = c.req.path;
   console.log(`[tRPC] ${c.req.method} ${path}`);
@@ -52,9 +52,9 @@ app.use("/api/trpc/*", async (c, next) => {
   }
 });
 
-// tRPC Handler - mounted at /api/trpc
+// tRPC Handler - mounted at /trpc
 app.use(
-  "/api/trpc/*",
+  "/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,
