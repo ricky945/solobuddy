@@ -159,7 +159,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [position, setPosition] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(() => getGlobalDurationMs(guide));
+  const [duration] = useState<number>(() => getGlobalDurationMs(guide));
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [showChapters, setShowChapters] = useState<boolean>(false);
@@ -173,7 +173,6 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
   useEffect(() => {
     const dur = getGlobalDurationMs(guide);
-    setDuration(dur);
     actualDurationRef.current = dur;
   }, [guide]);
 
@@ -281,14 +280,6 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
             setPosition(globalPos);
             setIsPlaying(!!status.isPlaying);
-
-            if (typeof status.durationMillis === "number" && status.durationMillis > 0) {
-              const actualDur = status.durationMillis;
-              if (actualDurationRef.current !== actualDur) {
-                actualDurationRef.current = actualDur;
-                setDuration(actualDur);
-              }
-            }
 
             if (status.didJustFinish) {
               const next = segIdx + 1;
@@ -583,8 +574,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
               >
                 {chapterItems.map((chapter, index) => {
                   const nextChapter = chapterItems[index + 1];
-                  const actualDur = actualDurationRef.current || duration || 0;
-                  const totalDurationSeconds = Math.floor(actualDur / 1000);
+                  const totalDurationSeconds = Math.floor(duration / 1000);
 
                   let chapterDurationSeconds = 0;
 
