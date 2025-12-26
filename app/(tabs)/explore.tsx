@@ -206,6 +206,9 @@ export default function ExploreScreen() {
     getLocation();
   }, [getLocation]);
 
+  const [autoFetchBlockedUntil, setAutoFetchBlockedUntil] = useState<number>(0);
+  const lastFetchKeyRef = useRef<string>("");
+
   const touristicQuery = trpc.landmarks.discover.useQuery(
     {
       latitude: coords?.latitude ?? 0,
@@ -214,9 +217,8 @@ export default function ExploreScreen() {
       type: "touristic",
     },
     {
-      enabled: Boolean(coords) && activeTab === "touristic",
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      enabled: false,
+      retry: 0,
       staleTime: 5 * 60 * 1000,
       refetchOnMount: false,
       refetchOnWindowFocus: false,
@@ -230,9 +232,8 @@ export default function ExploreScreen() {
       radius: 25,
     },
     {
-      enabled: Boolean(coords) && activeTab === "unique",
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+      enabled: false,
+      retry: 0,
       staleTime: 30 * 1000,
       refetchOnMount: false,
       refetchOnWindowFocus: false,
@@ -241,9 +242,72 @@ export default function ExploreScreen() {
 
   const activeQuery = activeTab === "touristic" ? touristicQuery : allQuery;
 
+  const canAutoFetch = useMemo(() => {
+    if (!coords) return false;
+    return Date.now() >= autoFetchBlockedUntil;
+  }, [autoFetchBlockedUntil, coords]);
+
+  const triggerFetch = useCallback(
+    async (reason: string) => {
+      if (!coords) return;
+
+      const fetchKey = `${activeTab}:${coords.latitude.toFixed(5)}:${coords.longitude.toFixed(5)}`;
+      if (fetchKey === lastFetchKeyRef.current && activeQuery.data) {
+        console.log("[Explore] triggerFetch skipped (same key + has data)", { reason, fetchKey });
+        return;
+      }
+
+      if (!canAutoFetch) {
+        console.log("[Explore] triggerFetch blocked", {
+          reason,
+          until: autoFetchBlockedUntil,
+          now: Date.now(),
+        });
+        return;
+      }
+
+      lastFetchKeyRef.current = fetchKey;
+      console.log("[Explore] triggerFetch", { reason, fetchKey, tab: activeTab });
+
+      try {
+        if (activeTab === "touristic") {
+          await touristicQuery.refetch();
+        } else {
+          await allQuery.refetch();
+        }
+      } catch (e) {
+        console.error("[Explore] triggerFetch refetch threw", e);
+      }
+    },
+    [activeQuery.data, activeTab, allQuery, autoFetchBlockedUntil, canAutoFetch, coords, touristicQuery]
+  );
+
   useEffect(() => {
-    if (activeQuery.error) {
-      console.error("[Explore] activeQuery error", { tab: activeTab, error: activeQuery.error });
+    if (!coords) return;
+    triggerFetch("initial/tab/location");
+  }, [activeTab, coords, triggerFetch]);
+
+  useEffect(() => {
+    const err = activeQuery.error as any;
+    if (!err) return;
+
+    const message = String(err?.message || "");
+    const httpStatus = err?.data?.httpStatus ?? err?.shape?.data?.httpStatus;
+    const code = err?.data?.code ?? err?.shape?.data?.code;
+
+    console.error("[Explore] activeQuery error", {
+      tab: activeTab,
+      message,
+      httpStatus,
+      code,
+      error: err,
+    });
+
+    const isNotFound = httpStatus === 404 || code === "NOT_FOUND" || message.toLowerCase().includes("no procedure found");
+    if (isNotFound) {
+      const blockMs = 60_000;
+      console.warn("[Explore] Blocking auto fetch due to NOT_FOUND", { blockMs });
+      setAutoFetchBlockedUntil(Date.now() + blockMs);
     }
   }, [activeQuery.error, activeTab]);
 
@@ -487,10 +551,16 @@ export default function ExploreScreen() {
           mapRef.current = r;
         }}
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
+        provider={Platform.OS === "web" ? undefined : PROVIDER_DEFAULT}
         initialRegion={region ?? undefined}
-        showsUserLocation
-        showsMyLocationButton
+        showsUserLocation={Platform.OS !== "web"}
+        showsMyLocationButton={Platform.OS !== "web"}
+        onMapReady={() => {
+          console.log("[Explore] map ready", { hasRegion: !!region });
+        }}
+        onMapLoaded={() => {
+          console.log("[Explore] map loaded");
+        }}
         testID="explore-map"
       >
         {items.map((l) => (
@@ -551,9 +621,22 @@ export default function ExploreScreen() {
       {activeQuery.isError ? (
         <View style={styles.errorOverlay} testID="explore-error-overlay">
           <Text style={styles.errorText}>{getErrorMessage(activeQuery.error)}</Text>
-          <TouchableOpacity onPress={() => activeQuery.refetch()} style={styles.retryButton} testID="explore-retry">
+          <TouchableOpacity
+            onPress={() => {
+              triggerFetch("user_retry");
+            }}
+            style={styles.retryButton}
+            testID="explore-retry"
+            activeOpacity={0.85}
+          >
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
+
+          {Date.now() < autoFetchBlockedUntil ? (
+            <Text style={styles.errorHint} testID="explore-error-hint">
+              Backend looks unavailable. Auto-retry paused for a moment.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -929,6 +1012,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: "#fff", fontSize: 14, fontWeight: "600" as const },
+  errorHint: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    lineHeight: 16,
+  },
 
   addButton: {
     position: "absolute" as const,
