@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,7 +9,6 @@ import {
   TextInput,
   Image,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
@@ -32,7 +31,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useUser } from "@/contexts/UserContext";
-import { AuthAppleButton } from "@/components/AuthAppleButton";
 
 const getCountryFlag = (country: string): string => {
   const countryToFlag: Record<string, string> = {
@@ -79,148 +77,20 @@ const getCountryFlag = (country: string): string => {
   return countryToFlag[country] || "🌍";
 };
 
-type BackendCheckStatus = "idle" | "checking" | "ok" | "error";
-
-type BackendCheckState = {
-  status: BackendCheckStatus;
-  message: string;
-  httpStatus?: number;
-  baseUrl?: string;
-  checkedAt?: string;
-};
 
 export default function AccountScreen() {
   const {
     user,
     updateProfile,
-    isAuthLoading,
-    isSignedIn,
-    authEmail,
-    signInWithPassword,
-    signUpWithPassword,
     signOut,
-    isSigningIn,
-    isSigningUp,
-    isSigningOut,
   } = useUser();
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-
-  const backendBaseUrl = useMemo(() => {
-    const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-    return url ? url.toString() : "";
-  }, []);
-
-  const [backendCheck, setBackendCheck] = useState<BackendCheckState>({
-    status: "idle",
-    message: "Not checked yet",
-    baseUrl: backendBaseUrl,
-  });
-
-  const checkBackendHealth = useCallback(async () => {
-    console.log("[Connection Check] Starting backend health check...");
-    console.log("[Connection Check] Base URL:", backendBaseUrl);
-
-    if (!backendBaseUrl) {
-      setBackendCheck({
-        status: "error",
-        message: "Missing EXPO_PUBLIC_RORK_API_BASE_URL",
-        baseUrl: backendBaseUrl,
-        checkedAt: new Date().toISOString(),
-      });
-      Alert.alert("Backend not configured", "Missing backend base URL. Please contact support.");
-      return;
-    }
-
-    setBackendCheck((prev) => ({
-      ...prev,
-      status: "checking",
-      message: "Checking /health…",
-      baseUrl: backendBaseUrl,
-    }));
-
-    const healthUrl = `${backendBaseUrl.replace(/\/$/, "")}/health`;
-
-    try {
-      const startedAt = Date.now();
-      const res = await fetch(healthUrl, {
-        method: "GET",
-        headers: { "Accept": "application/json" },
-      });
-      const elapsedMs = Date.now() - startedAt;
-
-      console.log("[Connection Check] /health response:", {
-        status: res.status,
-        ok: res.ok,
-        elapsedMs,
-        url: healthUrl,
-      });
-
-      let bodyText = "";
-      let json: unknown = null;
-
-      try {
-        const contentType = res.headers.get("content-type") ?? "";
-        if (contentType.includes("application/json")) {
-          json = await res.json();
-        } else {
-          bodyText = await res.text();
-        }
-      } catch (e) {
-        console.error("[Connection Check] Failed to parse /health response", e);
-      }
-
-      if (!res.ok) {
-        setBackendCheck({
-          status: "error",
-          message: `Backend returned error: ${res.status}`,
-          httpStatus: res.status,
-          baseUrl: backendBaseUrl,
-          checkedAt: new Date().toISOString(),
-        });
-        Alert.alert(
-          "Backend error",
-          `Backend health check failed (HTTP ${res.status}).\n\nURL: ${healthUrl}`
-        );
-        return;
-      }
-
-      const detail = json ? JSON.stringify(json).slice(0, 300) : bodyText.slice(0, 300);
-      setBackendCheck({
-        status: "ok",
-        message: `Healthy (${elapsedMs}ms)`,
-        httpStatus: res.status,
-        baseUrl: backendBaseUrl,
-        checkedAt: new Date().toISOString(),
-      });
-
-      console.log("[Connection Check] Backend healthy details (truncated):", detail);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Network error";
-      console.error("[Connection Check] Health check failed", e);
-      setBackendCheck({
-        status: "error",
-        message: msg,
-        baseUrl: backendBaseUrl,
-        checkedAt: new Date().toISOString(),
-      });
-      Alert.alert(
-        "Connection failed",
-        Platform.OS === "web"
-          ? "Could not reach backend. Check your internet connection or CORS settings."
-          : "Could not reach backend. Please check your connection and try again."
-      );
-    }
-  }, [backendBaseUrl]);
   const [editName, setEditName] = useState(user.profile?.name || "");
   const [editBio, setEditBio] = useState(user.profile?.bio || "");
   const [editCurrentCity, setEditCurrentCity] = useState(user.profile?.currentCity || "");
   const [editCountriesVisited, setEditCountriesVisited] = useState(user.profile?.countriesVisited?.join(", ") || "");
 
-  const [authEmailInput, setAuthEmailInput] = useState<string>(authEmail ?? "");
-  const [authPasswordInput, setAuthPasswordInput] = useState<string>("");
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   const hasProfile = user.profile && user.profile.name;
 
@@ -271,7 +141,6 @@ export default function AccountScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            setAuthMessage(null);
             await signOut();
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : "Failed to log out";
@@ -466,212 +335,6 @@ export default function AccountScreen() {
         >
           <Text style={styles.pageTitle}>Account</Text>
 
-          <View style={styles.backendCard} testID="backend-check-card">
-            <View style={styles.backendHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.backendTitle}>Backend</Text>
-                <Text style={styles.backendSubtitle} numberOfLines={2}>
-                  {backendCheck.baseUrl ? backendCheck.baseUrl : "No base URL configured"}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.backendButton,
-                  backendCheck.status === "checking" ? styles.backendButtonDisabled : null,
-                ]}
-                activeOpacity={0.85}
-                disabled={backendCheck.status === "checking"}
-                onPress={checkBackendHealth}
-                testID="backend-check-button"
-              >
-                {backendCheck.status === "checking" ? (
-                  <ActivityIndicator color={"#FFFFFF"} />
-                ) : (
-                  <Text style={styles.backendButtonText}>Check</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.backendStatusRow} testID="backend-check-status">
-              <View
-                style={[
-                  styles.backendDot,
-                  backendCheck.status === "ok"
-                    ? styles.backendDotOk
-                    : backendCheck.status === "error"
-                      ? styles.backendDotError
-                      : backendCheck.status === "checking"
-                        ? styles.backendDotChecking
-                        : styles.backendDotIdle,
-                ]}
-              />
-              <Text style={styles.backendStatusText} numberOfLines={2}>
-                {backendCheck.message}
-                {backendCheck.httpStatus ? ` (HTTP ${backendCheck.httpStatus})` : ""}
-              </Text>
-            </View>
-
-            {backendCheck.checkedAt ? (
-              <Text style={styles.backendMetaText} numberOfLines={1}>
-                Last checked: {new Date(backendCheck.checkedAt).toLocaleString()}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.authCard} testID="account-auth-card">
-            <View style={styles.authHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.authTitle}>{isSignedIn ? "Signed in" : authMode === "signin" ? "Sign in" : "Create account"}</Text>
-                <Text style={styles.authSubtitle}>
-                  {isSignedIn
-                    ? "Your account is connected."
-                    : "Sync your profile across devices and keep your tours safe."}
-                </Text>
-              </View>
-              {!isSignedIn ? (
-                <View style={styles.authModePills} testID="auth-mode-pills">
-                  <TouchableOpacity
-                    style={[styles.pill, authMode === "signin" ? styles.pillActive : null]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setAuthMode("signin");
-                      setAuthMessage(null);
-                    }}
-                    testID="auth-mode-signin"
-                  >
-                    <Text style={[styles.pillText, authMode === "signin" ? styles.pillTextActive : null]}>Sign in</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pill, authMode === "signup" ? styles.pillActive : null]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setAuthMode("signup");
-                      setAuthMessage(null);
-                    }}
-                    testID="auth-mode-signup"
-                  >
-                    <Text style={[styles.pillText, authMode === "signup" ? styles.pillTextActive : null]}>Sign up</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-
-            {isAuthLoading ? (
-              <View style={styles.authLoadingRow} testID="auth-loading">
-                <ActivityIndicator color={Colors.light.primary} />
-                <Text style={styles.authLoadingText}>Checking session…</Text>
-              </View>
-            ) : null}
-
-            {isSignedIn ? (
-              <View style={styles.signedInRow} testID="auth-signed-in-row">
-                <View style={styles.signedInBadge}>
-                  <Text style={styles.signedInBadgeText}>Connected</Text>
-                </View>
-                <Text style={styles.signedInEmail} numberOfLines={1}>
-                  {authEmail ?? ""}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.secondaryButton, isSigningOut ? styles.secondaryButtonDisabled : null]}
-                  activeOpacity={0.85}
-                  onPress={handleLogout}
-                  disabled={isSigningOut}
-                  testID="auth-signout"
-                >
-                  <Text style={styles.secondaryButtonText}>{isSigningOut ? "Signing out…" : "Sign out"}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.emailAuthWrap} testID="auth-email-form">
-                <View style={styles.inputGroup}>
-                  <Text style={styles.formLabel}>Email</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={authEmailInput}
-                    onChangeText={setAuthEmailInput}
-                    placeholder="you@example.com"
-                    placeholderTextColor={Colors.light.textSecondary}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    textContentType="emailAddress"
-                    autoCorrect={false}
-                    testID="auth-email-input"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.formLabel}>Password</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={authPasswordInput}
-                    onChangeText={setAuthPasswordInput}
-                    placeholder="••••••••"
-                    placeholderTextColor={Colors.light.textSecondary}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    textContentType={authMode === "signup" ? "newPassword" : "password"}
-                    testID="auth-password-input"
-                  />
-                  <Text style={styles.formHint}>{authMode === "signup" ? "Use 8+ characters." : ""}</Text>
-                </View>
-
-                {authMessage ? <Text style={styles.authMessage}>{authMessage}</Text> : null}
-
-                <TouchableOpacity
-                  style={[styles.primaryAuthButton, (isSigningIn || isSigningUp) ? styles.primaryAuthButtonDisabled : null]}
-                  activeOpacity={0.85}
-                  disabled={isSigningIn || isSigningUp}
-                  onPress={async () => {
-                    try {
-                      setAuthMessage(null);
-                      const email = authEmailInput.trim().toLowerCase();
-                      const password = authPasswordInput;
-
-                      if (!email || !email.includes("@")) {
-                        Alert.alert("Invalid email", "Please enter a valid email address.");
-                        return;
-                      }
-                      if (!password || password.length < 6) {
-                        Alert.alert("Invalid password", "Password must be at least 6 characters.");
-                        return;
-                      }
-
-                      if (authMode === "signin") {
-                        await signInWithPassword({ email, password });
-                        setAuthPasswordInput("");
-                        setAuthMessage("Signed in successfully.");
-                      } else {
-                        await signUpWithPassword({ email, password });
-                        setAuthPasswordInput("");
-                        setAuthMessage("Account created. Check your email if confirmation is required.");
-                      }
-                    } catch (e: unknown) {
-                      const msg = e instanceof Error ? e.message : "Authentication failed";
-                      console.error("[Account] email auth error", e);
-                      setAuthMessage(msg);
-                      Alert.alert("Authentication failed", msg);
-                    }
-                  }}
-                  testID="auth-email-submit"
-                >
-                  <Text style={styles.primaryAuthButtonText}>
-                    {authMode === "signin" ? (isSigningIn ? "Signing in…" : "Sign in") : isSigningUp ? "Creating…" : "Create account"}
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.authDividerRow}>
-                  <View style={styles.authDividerLine} />
-                  <Text style={styles.authDividerText}>or</Text>
-                  <View style={styles.authDividerLine} />
-                </View>
-
-                <View style={styles.authActions}>
-                  <AuthAppleButton />
-                </View>
-              </View>
-            )}
-          </View>
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
               <View style={styles.profilePicture}>
