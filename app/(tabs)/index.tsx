@@ -163,8 +163,13 @@ export default function ExploreScreen() {
   }, [rotateAnim1, rotateAnim2, rotateAnim3]);
 
   const goToNextStep = (step: FlowStep) => {
-    fadeAnim.setValue(0);
-    setFlowStep(step);
+    if (step === "generating" || step === "landmarkTopicsLoading") {
+      setFlowStep(step);
+      fadeAnim.setValue(1);
+    } else {
+      fadeAnim.setValue(0);
+      setFlowStep(step);
+    }
   };
 
   const goToPreviousStep = () => {
@@ -1298,40 +1303,14 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
       console.log("[Tour Generation] Tour saved successfully");
 
       if (tourType === "route" && transportMethod === "walking") {
-        Alert.alert(
-          "Tour Created!",
-          "Your walking tour is ready.",
-          [
-            {
-              text: "Start Tour",
-              onPress: () => router.push(`/tour-ready?tourId=${tourId}`),
-            },
-            {
-              text: "View Library",
-              onPress: () => router.push("/library"),
-            },
-          ]
-        );
-
+        console.log("[Tour Generation] Navigating to tour-ready screen");
+        router.push(`/tour-ready?tourId=${tourId}`);
         resetFlow();
         return;
       }
 
-      Alert.alert(
-        "Tour Created!",
-        "Your audio tour has been generated and added to your library.",
-        [
-          {
-            text: "View Library",
-            onPress: () => router.push("/library"),
-          },
-          {
-            text: "Create Another",
-            onPress: resetFlow,
-          },
-        ]
-      );
-      
+      console.log("[Tour Generation] Navigating to library");
+      router.push("/library");
       resetFlow();
     } catch (error) {
       console.error("[Tour Generation] Error:", error);
@@ -1710,11 +1689,11 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
   );
 
   const renderLandmarkTopicsLoading = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim }]}>
+    <View style={[styles.centeredContainer, { justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Loading All Available Information</Text>
       <Text style={styles.generatingText}>Please do not close the app</Text>
-    </Animated.View>
+    </View>
   );
 
   const renderLandmarkTopics = () => (
@@ -1765,11 +1744,12 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
   );
 
   const renderGenerating = () => (
-    <Animated.View style={[styles.centeredContainer, { opacity: fadeAnim, justifyContent: 'center' }]}>
+    <View style={[styles.centeredContainer, { justifyContent: 'center' }]}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
       <Text style={styles.generatingTitle}>Creating Your Tour</Text>
+      <Text style={styles.generatingText}>This may take 30-60 seconds</Text>
       <Text style={styles.generatingHint}>Please do not close the app</Text>
-    </Animated.View>
+    </View>
   );
 
   const renderContent = () => {
