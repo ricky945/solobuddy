@@ -20,7 +20,7 @@ export default function SplashScreen() {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      router.replace("/onboarding");
+      router.replace({ pathname: "/onboarding" as any } as any);
     });
   }, [fadeAnim, router]);
 

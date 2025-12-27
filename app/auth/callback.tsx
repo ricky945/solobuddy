@@ -28,7 +28,7 @@ export default function AuthCallbackScreen() {
       setStatus("success");
       setTimeout(() => {
         try {
-          router.replace("/(tabs)/account");
+          router.replace({ pathname: "/(tabs)/account" as any } as any);
         } catch (e) {
           console.error("[AuthCallback] navigation error", e);
         }

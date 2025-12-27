@@ -1428,13 +1428,13 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
 
       if (tourType === "route" && transportMethod === "walking") {
         console.log("[Tour Generation] Navigating to tour-ready screen");
-        router.push(`/tour-ready?tourId=${tourId}`);
+        router.push({ pathname: "/tour-ready" as any, params: { tourId } } as any);
         resetFlow();
         return;
       }
 
       console.log("[Tour Generation] Navigating to library");
-      router.push("/library");
+      router.push({ pathname: "/(tabs)/library" as any } as any);
       resetFlow();
     } catch (error) {
       console.error("[Tour Generation] Error:", error);

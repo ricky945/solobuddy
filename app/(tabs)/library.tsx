@@ -270,7 +270,7 @@ export default function LibraryScreen() {
                 guide={guide}
                 onPress={() => {
                   if (guide.type === "route") {
-                    router.push(`/route-navigation?tourId=${guide.id}`);
+                    router.push({ pathname: "/route-navigation" as any, params: { tourId: guide.id } } as any);
                   } else {
                     setSelectedGuide(guide);
                   }

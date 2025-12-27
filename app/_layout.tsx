@@ -60,9 +60,9 @@ function AppContent() {
   useEffect(() => {
     if (isReady) {
       if (!user.hasCompletedOnboarding) {
-        router.replace("/splash");
+        router.replace({ pathname: "/splash" as any } as any);
       } else {
-        router.replace("/(tabs)");
+        router.replace({ pathname: "/(tabs)" as any } as any);
       }
     }
   }, [isReady, user.hasCompletedOnboarding, router]);

@@ -197,7 +197,7 @@ export default function TourReadyScreen() {
         
         <TouchableOpacity
           style={styles.saveBtn}
-          onPress={() => router.push("/library")}
+          onPress={() => router.push({ pathname: "/(tabs)/library" as any } as any)}
           activeOpacity={0.8}
         >
           <Text style={styles.saveBtnText}>Save for later</Text>
