@@ -20,6 +20,7 @@ import Colors from "@/constants/colors";
 import { AudioGuide } from "@/types";
 import { useTours } from "@/contexts/ToursContext";
 import AudioPlayer from "@/components/AudioPlayer";
+import FeatureGuard from "@/components/FeatureGuard";
 
 interface SwipeableCardProps {
   guide: AudioGuide;
@@ -262,11 +263,12 @@ export default function LibraryScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView edges={["top"]} style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
+    <FeatureGuard featureName="Library">
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <SafeAreaView edges={["top"]} style={styles.safeArea}>
+          <ScrollView
+            style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -318,6 +320,7 @@ export default function LibraryScreen() {
         )}
       </Modal>
     </View>
+    </FeatureGuard>
   );
 }
 

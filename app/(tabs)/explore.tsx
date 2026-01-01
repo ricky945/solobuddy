@@ -24,6 +24,7 @@ import { discoverLandmarks, DiscoveredLandmark } from "@/lib/supabase-functions"
 import { getAllLandmarks } from "@/lib/supabase-landmarks";
 import LandmarkDetailModal from "@/components/LandmarkDetailModal";
 import AddLandmarkModal from "@/components/AddLandmarkModal";
+import FeatureGuard from "@/components/FeatureGuard";
 import { useUser } from "@/contexts/UserContext";
 import { useQuery } from "@tanstack/react-query";
 
@@ -215,16 +216,16 @@ export default function ExploreScreen() {
     queryKey: ['landmarks', 'discover', 'touristic', coords?.latitude, coords?.longitude],
     queryFn: async () => {
       if (!coords) return { landmarks: [] as DiscoveredLandmark[], location: coords, source: 'google_places' as const };
-      console.log('[Explore] Fetching touristic landmarks via Supabase...');
+      console.log('[Explore] Fetching ONLY historical landmarks & tourist attractions (3 mile radius)...', { lat: coords.latitude, lng: coords.longitude });
       return discoverLandmarks({
         latitude: coords.latitude,
         longitude: coords.longitude,
-        radius: 5000,
+        radius: 4828, // 3 miles in meters (3 * 1609.34)
         type: 'touristic',
       });
     },
-    enabled: false,
-    retry: false, // Don't retry on failure - function handles gracefully
+    enabled: !!coords, // Enable when we have coordinates
+    retry: 1, // Retry once on failure
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 mins
     refetchOnMount: false,
@@ -235,15 +236,15 @@ export default function ExploreScreen() {
   const allQuery = useQuery({
     queryKey: ['landmarks', 'all', coords?.latitude, coords?.longitude],
     queryFn: async () => {
-      console.log('[Explore] Fetching user landmarks via Supabase...');
+      console.log('[Explore] Fetching user landmarks (10 mile radius)...', { lat: coords?.latitude, lng: coords?.longitude });
       return getAllLandmarks({
         latitude: coords?.latitude,
         longitude: coords?.longitude,
-        radius: 25,
+        radius: 10, // 10 miles for user-created landmarks
       });
     },
-    enabled: false,
-    retry: false, // Don't retry on failure
+    enabled: !!coords, // Enable when we have coordinates
+    retry: 1, // Retry once on failure
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 mins
     refetchOnMount: false,
@@ -324,8 +325,6 @@ export default function ExploreScreen() {
         ? ((touristicQuery.data?.landmarks as MapLandmark[] | undefined) ?? [])
         : ((allQuery.data?.landmarks as MapLandmark[] | undefined) ?? []).filter((l) => l.type === "unique" || l.type === "restaurant");
 
-    console.log(`[Explore] Processing ${raw.length} landmarks`);
-
     const mapped: ExploreItem[] = raw
       .map((l) => {
         const lat = l.coordinates?.latitude;
@@ -340,18 +339,51 @@ export default function ExploreScreen() {
       .filter((x): x is ExploreItem => x !== null && Number.isFinite(x.distanceMiles));
 
     mapped.sort((a, b) => a.distanceMiles - b.distanceMiles);
+    
+    console.log(`[Explore] Processed ${mapped.length} items`, {
+      tab: activeTab,
+      userLocation: { lat: coords.latitude.toFixed(4), lng: coords.longitude.toFixed(4) },
+      closestDistance: mapped[0] ? `${mapped[0].distanceMiles.toFixed(2)}mi` : 'none',
+      furthestDistance: mapped[mapped.length - 1] ? `${mapped[mapped.length - 1].distanceMiles.toFixed(2)}mi` : 'none',
+    });
+    
     return mapped;
   }, [activeTab, allQuery.data?.landmarks, coords, touristicQuery.data?.landmarks]);
 
   const region: Region | null = useMemo(() => {
     if (!coords) return null;
+    
+    // Calculate region based on landmarks if available
+    if (items.length > 0) {
+      const lats = items.map(i => i.coordinates.latitude);
+      const lngs = items.map(i => i.coordinates.longitude);
+      
+      const minLat = Math.min(...lats, coords.latitude);
+      const maxLat = Math.max(...lats, coords.latitude);
+      const minLng = Math.min(...lngs, coords.longitude);
+      const maxLng = Math.max(...lngs, coords.longitude);
+      
+      // Add 40% padding around the landmarks
+      const latDelta = Math.max(0.02, (maxLat - minLat) * 1.4);
+      const lngDelta = Math.max(0.02, (maxLng - minLng) * 1.4);
+      
+      // Center on user location
+      return {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: Math.min(latDelta, 0.08), // Cap at ~5 mile view
+        longitudeDelta: Math.min(lngDelta, 0.08),
+      };
+    }
+    
+    // Default: 3 mile radius view
     return {
       latitude: coords.latitude,
       longitude: coords.longitude,
-      latitudeDelta: 0.06,
-      longitudeDelta: 0.06,
+      latitudeDelta: 0.05, // ~3.5 mile view
+      longitudeDelta: 0.05,
     };
-  }, [coords]);
+  }, [coords, items]);
 
   useEffect(() => {
     if (!region) return;
@@ -424,7 +456,7 @@ export default function ExploreScreen() {
                 <Text style={styles.cardName} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.cardDistance}>{formatDistance(item.distanceKm)}</Text>
+                <Text style={styles.cardDistance}>{formatDistance(item.distanceMiles)}</Text>
               </View>
               <Text style={styles.cardDesc} numberOfLines={2}>
                 {item.description}
@@ -509,17 +541,33 @@ export default function ExploreScreen() {
   const listEmpty = useMemo(() => {
     if (activeQuery.isLoading) return null;
 
+    const handleRefresh = () => {
+      console.log("[Explore] Manual refresh triggered");
+      lastFetchKeyRef.current = ""; // Reset to force a new fetch
+      triggerFetch("manual_refresh");
+    };
+
     return (
       <View style={styles.emptyContainer} testID="explore-empty">
-        <Text style={styles.emptyTitle}>{activeTab === "unique" ? "No hidden gems yet" : "No landmarks found"}</Text>
+        <Text style={styles.emptyTitle}>{activeTab === "unique" ? "No hidden gems nearby" : "No historical landmarks nearby"}</Text>
         {activeTab === "unique" ? (
-          <Text style={styles.emptySubtitle}>Be the first to add something locals love.</Text>
+          <Text style={styles.emptySubtitle}>Be the first to add a hidden gem in this area.</Text>
         ) : (
-          <Text style={styles.emptySubtitle}>Try moving the map or retrying.</Text>
+          <>
+            <Text style={styles.emptySubtitle}>Searching 3 miles for historical landmarks & tourist attractions.</Text>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              style={styles.refreshButton}
+              activeOpacity={0.85}
+              testID="explore-refresh"
+            >
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     );
-  }, [activeQuery.isLoading, activeTab]);
+  }, [activeQuery.isLoading, activeTab, triggerFetch]);
 
   const notifications = useMemo(() => {
     const all = (items as MapLandmark[]).filter((l) => l.createdBy === user.id && (l.type === "unique" || l.type === "restaurant"));
@@ -565,11 +613,12 @@ export default function ExploreScreen() {
   }
 
   return (
-    <View style={styles.container} testID="explore-screen">
-      <MapView
-        ref={(r) => {
-          mapRef.current = r;
-        }}
+    <FeatureGuard featureName="Explore">
+      <View style={styles.container} testID="explore-screen">
+        <MapView
+          ref={(r) => {
+            mapRef.current = r;
+          }}
         style={styles.map}
         provider={Platform.OS === "web" ? undefined : PROVIDER_DEFAULT}
         initialRegion={region ?? undefined}
@@ -672,7 +721,7 @@ export default function ExploreScreen() {
             testID="explore-tab-touristic"
           >
             <MapPin size={16} color={activeTab === "touristic" ? "#fff" : Colors.light.primary} />
-            <Text style={[styles.tabText, activeTab === "touristic" && styles.tabTextActive]}>Tourist Sites</Text>
+            <Text style={[styles.tabText, activeTab === "touristic" && styles.tabTextActive]}>Historic Sites</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -878,6 +927,7 @@ export default function ExploreScreen() {
         </View>
       </Modal>
     </View>
+    </FeatureGuard>
   );
 }
 
@@ -1111,6 +1161,24 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     textAlign: "center",
     lineHeight: 18,
+  },
+  refreshButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
+    textAlign: "center",
   },
 
   card: {

@@ -33,6 +33,7 @@ import Colors from "@/constants/colors";
 import { useTours } from "@/contexts/ToursContext";
 import type { Landmark } from "@/types";
 import { configureAudioForLockScreen, enableNowPlayingControls } from "@/lib/audio-config";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -180,6 +181,7 @@ export default function WalkingTourScreen() {
   }, []);
 
   const requestLocation = useCallback(async () => {
+    triggerHapticFeedback();
     setIsLocating(true);
     setLocationError("");
 
@@ -482,6 +484,7 @@ export default function WalkingTourScreen() {
   }, [loadSegment]);
 
   const onTogglePlay = useCallback(async () => {
+    triggerHapticFeedback();
     if (!currentLandmark) return;
 
     try {
@@ -569,6 +572,7 @@ export default function WalkingTourScreen() {
   }, [currentIdx, landmarks, segments, tour, router, sheetHeight, stopAudio, loadSegment]);
 
   const onAsk = useCallback(async () => {
+    triggerHapticFeedback();
     if (!question.trim() || !tour || !currentLandmark) return;
 
     setIsAsking(true);
@@ -620,6 +624,7 @@ export default function WalkingTourScreen() {
   }, [currentLandmark, question, tour]);
 
   const onOpenAsk = useCallback(() => {
+    triggerHapticFeedback();
     setIsAskOpen(true);
     setQuestion("");
     setAnswer("");
@@ -632,7 +637,10 @@ export default function WalkingTourScreen() {
         <Text style={styles.errorTitle}>Tour not available</Text>
         <Text style={styles.errorSubtitle}>Open this from your Library after creating a walking route tour.</Text>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            triggerHapticFeedback();
+            router.back();
+          }}
           activeOpacity={0.85}
           style={styles.errorButton}
           testID="walkingTourBack"
@@ -667,6 +675,7 @@ export default function WalkingTourScreen() {
             title={lm.name}
             pinColor={idx === currentIdx ? Colors.light.primary : "#FF6B6B"}
             onPress={() => {
+              triggerHapticFeedback();
               console.log("[WalkingTour] marker press", { idx });
               setCurrentIdx(idx);
             }}
@@ -845,6 +854,7 @@ export default function WalkingTourScreen() {
             <TouchableOpacity
               style={styles.dirBtn}
               onPress={() => {
+                triggerHapticFeedback();
                 console.log("[WalkingTour] Directions tapped");
                 Animated.spring(sheetHeight, {
                   toValue: SHEET_MAX,
@@ -912,13 +922,23 @@ export default function WalkingTourScreen() {
           <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setIsAskOpen(false)}
+            onPress={() => {
+              triggerHapticFeedback();
+              setIsAskOpen(false);
+            }}
           />
 
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} numberOfLines={1}>Ask about {currentLandmark.name}</Text>
-              <TouchableOpacity onPress={() => setIsAskOpen(false)} activeOpacity={0.85} testID="walkingTourAskClose">
+              <TouchableOpacity 
+                onPress={() => {
+                  triggerHapticFeedback();
+                  setIsAskOpen(false);
+                }} 
+                activeOpacity={0.85} 
+                testID="walkingTourAskClose"
+              >
                 <X size={20} color={Colors.light.text} />
               </TouchableOpacity>
             </View>
@@ -937,6 +957,7 @@ export default function WalkingTourScreen() {
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   onPress={() => {
+                    triggerHapticFeedback();
                     setQuestion("What should I look for here?");
                   }}
                   style={styles.chip}
@@ -948,6 +969,7 @@ export default function WalkingTourScreen() {
 
                 <TouchableOpacity
                   onPress={() => {
+                    triggerHapticFeedback();
                     setQuestion("What's the history of this place?");
                   }}
                   style={styles.chip}
@@ -958,6 +980,7 @@ export default function WalkingTourScreen() {
 
                 <TouchableOpacity
                   onPress={() => {
+                    triggerHapticFeedback();
                     setQuestion("Tell me an interesting fact about this landmark.");
                   }}
                   style={styles.chip}

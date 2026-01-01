@@ -33,6 +33,7 @@ import { useTours } from "@/contexts/ToursContext";
 import type { Landmark, AudioSegment } from "@/types";
 import { getThemedPlaceholder, getLocationImageWithFallback } from "@/lib/image-utils";
 import { configureAudioForLockScreen, enableNowPlayingControls } from "@/lib/audio-config";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 // Helper to extract city name from location or title
 function extractCityName(location?: string, title?: string): string {
@@ -500,11 +501,13 @@ export default function TourReadyScreen() {
   }, [audioDuration, audioReady, getSegmentIndexForGlobalMs, loadSegment]);
 
   const skipForward = useCallback(async () => {
+    triggerHapticFeedback();
     const newPos = Math.min(audioDuration, audioPosition + 15000);
     await handleSeek(newPos);
   }, [audioDuration, audioPosition, handleSeek]);
 
   const skipBackward = useCallback(async () => {
+    triggerHapticFeedback();
     const newPos = Math.max(0, audioPosition - 15000);
     await handleSeek(newPos);
   }, [audioPosition, handleSeek]);
@@ -587,6 +590,7 @@ export default function TourReadyScreen() {
   }, [fadeAnim, slideAnim, landmarks.length]);
 
   const onStart = useCallback(() => {
+    triggerHapticFeedback();
     console.log("[TourReady] Start tour", { tourId: String(tourId ?? "") });
     router.replace({
       pathname: "/walking-tour",
@@ -716,7 +720,10 @@ export default function TourReadyScreen() {
         
         <TouchableOpacity
           style={styles.saveBtn}
-          onPress={() => router.push({ pathname: "/(tabs)/library" as any } as any)}
+          onPress={() => {
+            triggerHapticFeedback();
+            router.push({ pathname: "/(tabs)/library" as any } as any);
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.saveBtnText}>Save for later</Text>

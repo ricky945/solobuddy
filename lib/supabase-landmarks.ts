@@ -50,7 +50,7 @@ function calculateDistance(
   lat2: number,
   lon2: number
 ): number {
-  const R = 6371;
+  const R = 3959; // Earth's radius in miles (changed from 6371 km)
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -112,13 +112,14 @@ function landmarkToRow(landmark: MapLandmark): Omit<LandmarkRow, 'created_at'> &
 
 /**
  * Get all landmarks, optionally filtered by region
+ * @param params.radius - Search radius in miles (not kilometers)
  */
 export async function getAllLandmarks(params?: {
   latitude?: number;
   longitude?: number;
-  radius?: number;
+  radius?: number; // in miles
 }): Promise<LandmarksResponse> {
-  console.log('[SupabaseLandmarks] getAllLandmarks', params);
+  console.log('[SupabaseLandmarks] getAllLandmarks (radius in miles)', params);
   
   try {
     const { data, error } = await supabase

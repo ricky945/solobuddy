@@ -100,11 +100,17 @@ export const [UserProvider, useUser] = createContextHook(() => {
       return Date.now() < user.subscriptionExpiresAt;
     }
 
-    return false;
+    // If no expiration date but has a paid tier, consider it active
+    return user.subscriptionTier !== "free";
   };
 
   const canCreateTour = () => {
-    return true;
+    const user = userQuery.data || defaultUser;
+    return hasActiveSubscription() || user.toursRemaining > 0;
+  };
+
+  const canAccessFeature = () => {
+    return hasActiveSubscription();
   };
 
   const updateProfile = (profile: Partial<UserProfile>) => {
@@ -249,6 +255,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     upgradeTier,
     incrementToursCreated,
     canCreateTour,
+    canAccessFeature,
     hasActiveSubscription,
     updateProfile,
     updateUser: updateUserMutation.mutate,

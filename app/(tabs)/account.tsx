@@ -31,6 +31,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useUser } from "@/contexts/UserContext";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 const getCountryFlag = (country: string): string => {
   const countryToFlag: Record<string, string> = {
@@ -95,6 +96,7 @@ export default function AccountScreen() {
   const hasProfile = user.profile && user.profile.name;
 
   const handleSaveProfile = () => {
+    triggerHapticFeedback();
     console.log("[Account] Saving profile...");
     if (!editName.trim()) {
       Alert.alert("Error", "Please enter your name");
@@ -118,6 +120,7 @@ export default function AccountScreen() {
   };
 
   const handleCancelEdit = () => {
+    triggerHapticFeedback();
     setEditName(user.profile?.name || "");
     setEditBio(user.profile?.bio || "");
     setEditCurrentCity(user.profile?.currentCity || "");
@@ -126,6 +129,7 @@ export default function AccountScreen() {
   };
 
   const handleCreateProfile = () => {
+    triggerHapticFeedback();
     setEditName("");
     setEditBio("");
     setEditCurrentCity("");
@@ -164,6 +168,7 @@ export default function AccountScreen() {
   };
 
   const handlePickImage = async () => {
+    triggerHapticFeedback();
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
@@ -362,7 +367,10 @@ export default function AccountScreen() {
               </View>
               <TouchableOpacity
                 style={styles.editButton}
-                onPress={() => setIsEditingProfile(true)}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  setIsEditingProfile(true);
+                }}
                 activeOpacity={0.8}
               >
                 <Edit3 size={18} color={Colors.light.primary} />
@@ -395,7 +403,11 @@ export default function AccountScreen() {
             <Text style={styles.sectionTitle}>Account Management</Text>
 
             <View style={styles.settingsCard}>
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                activeOpacity={0.7}
+                onPress={() => triggerHapticFeedback()}
+              >
                 <View style={styles.settingIcon}>
                   <CreditCard size={20} color={Colors.light.primary} />
                 </View>
@@ -410,7 +422,11 @@ export default function AccountScreen() {
 
               <View style={styles.settingDivider} />
 
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                activeOpacity={0.7}
+                onPress={() => triggerHapticFeedback()}
+              >
                 <View style={styles.settingIcon}>
                   <Bell size={20} color={Colors.light.primary} />
                 </View>
@@ -425,7 +441,11 @@ export default function AccountScreen() {
 
               <View style={styles.settingDivider} />
 
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                activeOpacity={0.7}
+                onPress={() => triggerHapticFeedback()}
+              >
                 <View style={styles.settingIcon}>
                   <Lock size={20} color={Colors.light.primary} />
                 </View>
@@ -444,7 +464,11 @@ export default function AccountScreen() {
             <Text style={styles.sectionTitle}>Support</Text>
 
             <View style={styles.settingsCard}>
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                activeOpacity={0.7}
+                onPress={() => triggerHapticFeedback()}
+              >
                 <View style={styles.settingIcon}>
                   <HelpCircle size={20} color={Colors.light.primary} />
                 </View>
@@ -459,7 +483,11 @@ export default function AccountScreen() {
 
               <View style={styles.settingDivider} />
 
-              <TouchableOpacity style={styles.settingItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                activeOpacity={0.7}
+                onPress={() => triggerHapticFeedback()}
+              >
                 <View style={styles.settingIcon}>
                   <Info size={20} color={Colors.light.primary} />
                 </View>

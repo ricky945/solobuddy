@@ -28,6 +28,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import type { AudioGuide, AudioSegment } from "@/types";
 import { configureAudioForLockScreen, enableNowPlayingControls } from "@/lib/audio-config";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 interface AudioPlayerProps {
   guide: AudioGuide;
@@ -389,6 +390,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [loadSegment]);
 
   const togglePlayPause = useCallback(async () => {
+    triggerHapticFeedback();
     const s = soundRef.current;
     if (!s) return;
 
@@ -409,6 +411,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, []);
 
   const stopPlayback = useCallback(async () => {
+    triggerHapticFeedback();
     setIsPlaying(false);
     setPosition(0);
     setSegmentIndex(0);
@@ -422,6 +425,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [loadSegment]);
 
   const handleClose = useCallback(() => {
+    triggerHapticFeedback();
     void stopPlayback();
     onClose();
   }, [onClose, stopPlayback]);
@@ -478,6 +482,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
 
   const handleSeekAndPlay = useCallback(
     async (value: number) => {
+      triggerHapticFeedback();
       const targetIdx = getSegmentIndexForGlobalMs(value);
       await loadSegment(targetIdx, { shouldPlay: true, globalPositionMs: value });
       setPosition(value);
@@ -487,6 +492,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   );
 
   const skipForward = useCallback(async () => {
+    triggerHapticFeedback();
     try {
       const dur = duration ?? position + 15000;
       const newPos = Math.min(dur, position + 15000);
@@ -497,6 +503,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [duration, handleSeekAndPlay, position]);
 
   const skipBackward = useCallback(async () => {
+    triggerHapticFeedback();
     try {
       const newPos = Math.max(0, position - 15000);
       await handleSeekAndPlay(newPos);
@@ -506,6 +513,7 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
   }, [handleSeekAndPlay, position]);
 
   const changeSpeed = useCallback(async () => {
+    triggerHapticFeedback();
     const s = soundRef.current;
     try {
       const newSpeed = playbackSpeed === 1 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
@@ -630,7 +638,10 @@ export default function AudioPlayer({ guide, onClose }: AudioPlayerProps) {
           {chapterItems.length > 0 && (
             <TouchableOpacity
               style={styles.chaptersButton}
-              onPress={() => setShowChapters((v) => !v)}
+              onPress={() => {
+                triggerHapticFeedback();
+                setShowChapters((v) => !v);
+              }}
               activeOpacity={0.85}
               testID="audioPlayerChaptersToggle"
             >

@@ -4,12 +4,10 @@
     "slug": "solobuddy-audio-city-tours",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -81,7 +79,6 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "app.rork.solobuddy_audio_city_tours",
@@ -106,7 +103,6 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       [
@@ -178,6 +174,15 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "SUPABASE_URL": "https://blcnymocctrbnqljzzco.supabase.co",
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "a9bd5d39-304d-4d42-af02-4c678604e3cf"
+      }
     }
   }
 }

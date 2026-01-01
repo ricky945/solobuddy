@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator } from "react-native";
-// import { SuperwallProvider } from "expo-superwall"; // Requires development build
+import { SuperwallProvider } from "expo-superwall";
 
 import "@/lib/supabase";
 
@@ -47,11 +47,20 @@ function AppContent() {
 }
 
 export default function RootLayout() {
+  console.log("[RootLayout] Initializing with Superwall API Key: pk_l_qcxglqeCCusMPswKC7W");
+  
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        {/* SuperwallProvider requires development build - commented out for Expo Go */}
-        {/* <SuperwallProvider apiKeys={{ ios: "pk_l_qcxglqeCCusMPswKC7W" }}> */}
+        <SuperwallProvider 
+          apiKeys={{ ios: "pk_l_qcxglqeCCusMPswKC7W" }}
+          options={{
+            logging: {
+              level: "debug",
+              scopes: ["all"]
+            }
+          }}
+        >
           <QueryClientProvider client={queryClient}>
             <trpc.Provider client={trpcClient} queryClient={queryClient}>
               <GestureHandlerRootView style={{ flex: 1 }}>
@@ -63,7 +72,7 @@ export default function RootLayout() {
               </GestureHandlerRootView>
             </trpc.Provider>
           </QueryClientProvider>
-        {/* </SuperwallProvider> */}
+        </SuperwallProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

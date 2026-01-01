@@ -20,97 +20,10 @@ import * as Notifications from "expo-notifications";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { Star, Camera, MapPin, Headphones } from "lucide-react-native";
-import Svg, { Path, Ellipse } from "react-native-svg";
-
-// Classic Laurel Wreath SVG Component - matching your reference design
-const LaurelWreath = ({ color = "#D4AF37", size = 300 }: { color?: string; size?: number }) => {
-  const createLeaf = (x: number, y: number, rotation: number, scale = 1) => (
-    <Path
-      d={`M 0 0 Q ${6 * scale} ${-12 * scale} ${12 * scale} ${-3 * scale} 
-          Q ${10 * scale} 0 ${12 * scale} ${3 * scale} 
-          Q ${6 * scale} ${12 * scale} 0 0 Z`}
-      fill={color}
-      transform={`translate(${x}, ${y}) rotate(${rotation})`}
-    />
-  );
-
-  const leaves = [];
-  const center = size / 2;
-  
-  // Left branch - curved upward
-  const leftBranchLeaves = [
-    // Bottom leaves
-    { x: 70, y: 235, rot: -45, scale: 1.2 },
-    { x: 85, y: 240, rot: -35, scale: 1.1 },
-    { x: 65, y: 220, rot: -50, scale: 1.0 },
-    { x: 80, y: 222, rot: -40, scale: 0.95 },
-    // Middle leaves
-    { x: 55, y: 200, rot: -60, scale: 1.1 },
-    { x: 70, y: 205, rot: -50, scale: 1.0 },
-    { x: 50, y: 180, rot: -65, scale: 1.0 },
-    { x: 62, y: 185, rot: -55, scale: 0.95 },
-    { x: 45, y: 160, rot: -70, scale: 1.0 },
-    { x: 55, y: 165, rot: -60, scale: 0.9 },
-    // Upper middle
-    { x: 42, y: 140, rot: -75, scale: 1.0 },
-    { x: 50, y: 145, rot: -68, scale: 0.9 },
-    { x: 40, y: 120, rot: -80, scale: 0.95 },
-    { x: 47, y: 125, rot: -73, scale: 0.85 },
-    // Top leaves
-    { x: 40, y: 100, rot: -85, scale: 0.95 },
-    { x: 45, y: 105, rot: -78, scale: 0.85 },
-    { x: 42, y: 80, rot: -88, scale: 0.9 },
-    { x: 46, y: 85, rot: -82, scale: 0.8 },
-    { x: 45, y: 60, rot: -90, scale: 0.85 },
-  ];
-
-  // Right branch - mirror of left
-  const rightBranchLeaves = [
-    // Bottom leaves
-    { x: 230, y: 235, rot: 225, scale: 1.2 },
-    { x: 215, y: 240, rot: 215, scale: 1.1 },
-    { x: 235, y: 220, rot: 230, scale: 1.0 },
-    { x: 220, y: 222, rot: 220, scale: 0.95 },
-    // Middle leaves
-    { x: 245, y: 200, rot: 240, scale: 1.1 },
-    { x: 230, y: 205, rot: 230, scale: 1.0 },
-    { x: 250, y: 180, rot: 245, scale: 1.0 },
-    { x: 238, y: 185, rot: 235, scale: 0.95 },
-    { x: 255, y: 160, rot: 250, scale: 1.0 },
-    { x: 245, y: 165, rot: 240, scale: 0.9 },
-    // Upper middle
-    { x: 258, y: 140, rot: 255, scale: 1.0 },
-    { x: 250, y: 145, rot: 248, scale: 0.9 },
-    { x: 260, y: 120, rot: 260, scale: 0.95 },
-    { x: 253, y: 125, rot: 253, scale: 0.85 },
-    // Top leaves
-    { x: 260, y: 100, rot: 265, scale: 0.95 },
-    { x: 255, y: 105, rot: 258, scale: 0.85 },
-    { x: 258, y: 80, rot: 268, scale: 0.9 },
-    { x: 254, y: 85, rot: 262, scale: 0.8 },
-    { x: 255, y: 60, rot: 270, scale: 0.85 },
-  ];
-
-  // Create all leaves
-  leftBranchLeaves.forEach((leaf, i) => {
-    leaves.push(<React.Fragment key={`left-${i}`}>{createLeaf(leaf.x, leaf.y, leaf.rot, leaf.scale)}</React.Fragment>);
-  });
-  
-  rightBranchLeaves.forEach((leaf, i) => {
-    leaves.push(<React.Fragment key={`right-${i}`}>{createLeaf(leaf.x, leaf.y, leaf.rot, leaf.scale)}</React.Fragment>);
-  });
-
-  return (
-    <Svg width={size} height={size} viewBox="0 0 300 300">
-      {leaves}
-      {/* Bottom center decoration */}
-      <Ellipse cx={150} cy={245} rx={6} ry={6} fill={color} />
-    </Svg>
-  );
-};
-
+import { usePlacement } from "expo-superwall";
 import { useUser } from "@/contexts/UserContext";
 import Colors from "@/constants/colors";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 const { width, height } = Dimensions.get("window");
 
@@ -290,28 +203,34 @@ const PAIN_POINT_OPTIONS = [
 // Reviews for final slide
 const REVIEWS = [
   {
-    name: "Alex T.",
+    name: "Sarah M.",
+    title: "Perfect for solo travelers",
+    text: "This app made exploring Rome so much easier. The audio tours were informative and the route suggestions helped me discover places I wouldn't have found on my own.",
     rating: 5,
-    text: "Changed how I travel. The walking tours felt like having a local friend, not some generic audio guide.",
-    avatar: "https://i.pravatar.cc/150?img=12",
   },
   {
-    name: "Jordan K.",
+    name: "James K.",
+    title: "Great walking tours",
+    text: "Used this in Barcelona and it was fantastic. The landmark information was detailed and the offline maps saved me so much data. Highly recommend.",
     rating: 5,
-    text: "Landmark info was actually interesting. Saved me €30 for a tour guide in Rome.",
-    avatar: "https://i.pravatar.cc/150?img=33",
   },
   {
-    name: "Sam R.",
+    name: "Emma L.",
+    title: "Love the audio guides",
+    text: "The audio tours feel like having a knowledgeable friend showing you around. Much better than reading from a guidebook while trying to navigate.",
     rating: 5,
-    text: "Found spots I never would have found on Google Maps. The little discoveries make trips memorable.",
-    avatar: "https://i.pravatar.cc/150?img=47",
   },
   {
-    name: "Casey M.",
-    rating: 4,
-    text: "Really solid app. The audio tours are well-paced and feel personalized.",
-    avatar: "https://i.pravatar.cc/150?img=29",
+    name: "Michael R.",
+    title: "Worth every penny",
+    text: "Saved me from buying expensive guided tours. The app is well designed and the content is actually interesting, not just dry facts.",
+    rating: 5,
+  },
+  {
+    name: "Lisa T.",
+    title: "Excellent for discovering",
+    text: "Found so many hidden gems I would have missed otherwise. The walking routes are well-paced and the recommendations were spot on.",
+    rating: 5,
   },
 ];
 
@@ -402,6 +321,39 @@ const LIGHT_BLUE = "#E3F2FD";
 export default function OnboardingScreen() {
   const router = useRouter();
   const { updateUser } = useUser();
+  
+  // Superwall paywall integration
+  const { registerPlacement, state: paywallState } = usePlacement({
+    onPresent: (info) => console.log("[Superwall] ✅ Paywall presented:", info.name),
+    onDismiss: (info, result) => {
+      console.log("[Superwall] Paywall dismissed:", result.type);
+      // After paywall interaction, navigate to main app
+      console.log("[Onboarding] Navigating to main app");
+      router.replace("/(tabs)");
+    },
+    onSkip: (reason) => {
+      console.log("[Superwall] ⚠️ Paywall skipped:", reason.type);
+      // If paywall is skipped, navigate to main app
+      console.log("[Onboarding] Navigating to main app");
+      router.replace("/(tabs)");
+    },
+    onError: (error) => {
+      console.error("[Superwall] ❌ Error:", error);
+      // On error, still allow user to continue to main app
+      console.log("[Onboarding] Navigating to main app");
+      router.replace("/(tabs)");
+    },
+  });
+  
+  // Monitor state changes
+  useEffect(() => {
+    console.log("[Superwall] State changed:", paywallState.status);
+    if (paywallState.status === 'skipped') {
+      console.log("[Superwall] Skipped reason:", JSON.stringify(paywallState.reason));
+    } else if (paywallState.status === 'error') {
+      console.log("[Superwall] Error:", paywallState.error);
+    }
+  }, [paywallState]);
   
   console.log("[Onboarding] Screen mounted");
   
@@ -758,6 +710,9 @@ export default function OnboardingScreen() {
   };
 
   const handleComplete = async () => {
+    console.log("[Onboarding] 🎯 handleComplete called");
+    
+    // Save onboarding data
     updateUser({ 
       hasCompletedOnboarding: true,
       name: userName || undefined,
@@ -769,7 +724,25 @@ export default function OnboardingScreen() {
         painPoint,
       },
     });
-    router.replace("/(tabs)");
+    
+    console.log("[Onboarding] 💾 User data saved");
+    console.log("[Onboarding] Triggering paywall");
+    
+    // Trigger the Superwall paywall
+    try {
+      await registerPlacement({
+        placement: "onboarding_complete",
+        params: { source: "onboarding" },
+        feature: () => {
+          console.log("[Onboarding] User has access or completed paywall flow");
+          // The onDismiss/onSkip/onError callbacks will handle navigation
+        }
+      });
+    } catch (error) {
+      console.error("[Onboarding] Error showing paywall:", error);
+      // On error, navigate to main app
+      router.replace("/(tabs)");
+    }
   };
 
   const handleNotifications = async () => {
@@ -931,7 +904,10 @@ export default function OnboardingScreen() {
       <Animated.View style={[styles.ctaContainer, { opacity: buttonFadeAnim }]}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => transitionToStep("did-you-know")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("did-you-know");
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.primaryButtonText}>Start Creating Tours</Text>
@@ -972,7 +948,10 @@ export default function OnboardingScreen() {
       <View style={styles.didYouKnowButtonContainer}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => transitionToStep("name")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("name");
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.primaryButtonText}>Continue</Text>
@@ -1003,7 +982,10 @@ export default function OnboardingScreen() {
         />
         <TouchableOpacity
           style={[styles.primaryButton, !userName.trim() && styles.buttonDisabled]}
-          onPress={() => transitionToStep("on-trip")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("on-trip");
+          }}
           disabled={!userName.trim()}
           activeOpacity={0.8}
         >
@@ -1021,6 +1003,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             style={[styles.optionButton, onTrip === true && styles.optionButtonSelected]}
             onPress={() => {
+              triggerHapticFeedback();
               setOnTrip(true);
               setTimeout(() => transitionToStep("trip-days"), 200);
             }}
@@ -1031,6 +1014,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             style={[styles.optionButton, onTrip === false && styles.optionButtonSelected]}
             onPress={() => {
+              triggerHapticFeedback();
               setOnTrip(false);
               setTimeout(() => transitionToStep("planning-trip"), 200);
             }}
@@ -1064,6 +1048,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             style={[styles.optionButton, planningTrip === false && styles.optionButtonSelected]}
             onPress={() => {
+              triggerHapticFeedback();
               setPlanningTrip(false);
               setTimeout(() => transitionToStep("trip-days"), 200);
             }}
@@ -1140,12 +1125,15 @@ export default function OnboardingScreen() {
         />
           <TouchableOpacity
           style={[styles.primaryButton, !tripDays && styles.buttonDisabled]}
-          onPress={() => transitionToStep("cities-count")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("cities-count");
+          }}
           disabled={!tripDays}
           activeOpacity={0.8}
         >
           <Text style={styles.primaryButtonText}>Continue</Text>
-          </TouchableOpacity>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -1169,7 +1157,10 @@ export default function OnboardingScreen() {
         />
           <TouchableOpacity
           style={[styles.primaryButton, !citiesCount && styles.buttonDisabled]}
-          onPress={() => transitionToStep("tourist-points")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("tourist-points");
+          }}
           disabled={!citiesCount}
           activeOpacity={0.8}
         >
@@ -1195,6 +1186,7 @@ export default function OnboardingScreen() {
                 touristPoints === option && styles.pointsOptionSelected,
               ]}
             onPress={() => {
+                triggerHapticFeedback();
                 setTouristPoints(option);
                 setTimeout(() => transitionToStep("save-intro"), 200);
               }}
@@ -1208,7 +1200,7 @@ export default function OnboardingScreen() {
               >
                 {option}
               </Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
           ))}
         </View>
       </View>
@@ -1308,11 +1300,14 @@ export default function OnboardingScreen() {
 
             <TouchableOpacity
               style={styles.primaryButton}
-              onPress={() => transitionToStep("pain-research")}
+              onPress={() => {
+                triggerHapticFeedback();
+                transitionToStep("pain-research");
+              }}
               activeOpacity={0.8}
             >
-          <Text style={styles.primaryButtonText}>Continue</Text>
-        </TouchableOpacity>
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </TouchableOpacity>
       </View>
         </ScrollView>
     </View>
@@ -1330,14 +1325,20 @@ export default function OnboardingScreen() {
         <View style={styles.painYesNoContainer}>
           <TouchableOpacity
             style={styles.painYesButton}
-            onPress={() => transitionToStep("pain-missed")}
+            onPress={() => {
+              triggerHapticFeedback();
+              transitionToStep("pain-missed");
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.painYesButtonText}>Yes</Text>
             </TouchableOpacity>
             <TouchableOpacity
             style={styles.painNoButton}
-            onPress={() => transitionToStep("pain-missed")}
+            onPress={() => {
+              triggerHapticFeedback();
+              transitionToStep("pain-missed");
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.painNoButtonText}>No</Text>
@@ -1358,14 +1359,20 @@ export default function OnboardingScreen() {
         <View style={styles.painYesNoContainer}>
           <TouchableOpacity
             style={styles.painYesButton}
-            onPress={() => transitionToStep("did-you-know-context")}
+            onPress={() => {
+              triggerHapticFeedback();
+              transitionToStep("did-you-know-context");
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.painYesButtonText}>Yes</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.painNoButton}
-            onPress={() => transitionToStep("did-you-know-context")}
+            onPress={() => {
+              triggerHapticFeedback();
+              transitionToStep("did-you-know-context");
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.painNoButtonText}>No</Text>
@@ -1401,7 +1408,10 @@ export default function OnboardingScreen() {
       <View style={styles.didYouKnowButtonContainer}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => transitionToStep("feature-intro")}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("feature-intro");
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.primaryButtonText}>Continue</Text>
@@ -1524,7 +1534,10 @@ export default function OnboardingScreen() {
           
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => transitionToStep("feature-discover")}
+            onPress={() => {
+              triggerHapticFeedback();
+              transitionToStep("feature-discover");
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.primaryButtonText}>Continue</Text>
@@ -1691,7 +1704,10 @@ export default function OnboardingScreen() {
               
               <TouchableOpacity
                 style={styles.demoPrimaryBtn}
-                onPress={() => transitionDemoStep("tour-type")}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  transitionDemoStep("tour-type");
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.demoPrimaryBtnText}>Try It Now</Text>
@@ -1708,7 +1724,10 @@ export default function OnboardingScreen() {
               <View style={styles.demoTourTypesGrid}>
                 <TouchableOpacity
                   style={[styles.demoTourTypeCard, styles.demoTourTypeCardSelected]}
-                  onPress={() => transitionDemoStep("location")}
+                  onPress={() => {
+                    triggerHapticFeedback();
+                    transitionDemoStep("location");
+                  }}
                   activeOpacity={0.8}
                 >
                   <View style={styles.demoTourTypeIconContainer}>
@@ -1720,7 +1739,10 @@ export default function OnboardingScreen() {
                 
                 <TouchableOpacity
                   style={styles.demoTourTypeCard}
-                  onPress={() => transitionDemoStep("location")}
+                  onPress={() => {
+                    triggerHapticFeedback();
+                    transitionDemoStep("location");
+                  }}
                   activeOpacity={0.8}
                 >
                   <View style={styles.demoTourTypeIconContainer}>
@@ -1732,7 +1754,10 @@ export default function OnboardingScreen() {
                 
                 <TouchableOpacity
                   style={styles.demoTourTypeCard}
-                  onPress={() => transitionDemoStep("location")}
+                  onPress={() => {
+                    triggerHapticFeedback();
+                    transitionDemoStep("location");
+                  }}
                   activeOpacity={0.8}
                 >
                   <View style={styles.demoTourTypeIconContainer}>
@@ -1761,7 +1786,10 @@ export default function OnboardingScreen() {
               
               <TouchableOpacity
                 style={styles.demoPrimaryBtn}
-                onPress={() => transitionDemoStep("topics")}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  transitionDemoStep("topics");
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.demoPrimaryBtnText}>Continue</Text>
@@ -1798,7 +1826,10 @@ export default function OnboardingScreen() {
               
               <TouchableOpacity
                 style={styles.demoPrimaryBtn}
-                onPress={() => transitionDemoStep("generating")}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  transitionDemoStep("generating");
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.demoPrimaryBtnText}>Generate Tour</Text>
@@ -1819,7 +1850,10 @@ export default function OnboardingScreen() {
               <Animated.View style={{ opacity: generatingButtonFadeAnim, marginTop: 40 }}>
                 <TouchableOpacity
                   style={styles.demoPrimaryBtn}
-                  onPress={() => transitionDemoStep("library")}
+                  onPress={() => {
+                    triggerHapticFeedback();
+                    transitionDemoStep("library");
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.demoPrimaryBtnText}>View Result</Text>
@@ -1858,6 +1892,7 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 style={styles.demoPrimaryBtn}
                 onPress={() => {
+                  triggerHapticFeedback();
                   setAudioTourDemoState("intro");
                   transitionToStep("feature-landmark");
                 }}
@@ -1900,87 +1935,108 @@ export default function OnboardingScreen() {
 
   const renderReviewsSlide = () => (
     <View style={styles.slideContainer}>
-      <ScrollView contentContainerStyle={styles.reviewsScrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.reviewsContent}>
-          {/* Headline */}
-          <Text style={styles.socialProofHeadline}>
-            <Text style={styles.textBlue}>Solobuddy</Text> was built for{'\n'}travelers just like you
-          </Text>
+      {/* Fixed Header Section */}
+      <View style={styles.socialProofFixedHeader}>
+        {/* Headline */}
+        <Text style={styles.socialProofHeadline}>
+          <Text style={styles.socialProofHeadlineRegular}>Solobuddy was designed{'\n'}for </Text>
+          <Text style={styles.textBlue}>travelers like you</Text>
+          <Text style={styles.socialProofHeadlineRegular}>.</Text>
+        </Text>
+        
+        {/* Subheadline */}
+        <Text style={styles.socialProofSubheadline}>
+          reviews from travelers using Solobuddy.
+        </Text>
+        
+        {/* Wreath Badge with Text */}
+        <View style={styles.wreathBadgeContainer}>
+          {/* Left half wreath */}
+          <Image 
+            source={{ uri: 'https://user-content.superwalleditor.com/user-content/qPU58XOnYEVq8y-eOD-2y.png' }}
+            style={styles.wreathLeftImageOuter}
+            resizeMode="contain"
+            onLoad={() => console.log('[Wreath] Left loaded')}
+            onError={(e) => console.log('[Wreath] Left error:', e.nativeEvent.error)}
+          />
+          {/* Right half wreath */}
+          <Image 
+            source={{ uri: 'https://user-content.superwalleditor.com/user-content/CNBEXdRti1UmIhbciDs9E.png' }}
+            style={styles.wreathRightImageOuter}
+            resizeMode="contain"
+            onLoad={() => console.log('[Wreath] Right loaded')}
+            onError={(e) => console.log('[Wreath] Right error:', e.nativeEvent.error)}
+          />
           
-          {/* Circular Wreath Badge with Text */}
-          <View style={styles.wreathBadgeContainer}>
-            <View style={styles.wreathBadge}>
-              <Image 
-                source={require('@/assets/images/laurel-wreath.png')}
-                style={[styles.wreathImage, { tintColor: undefined }]}
-                resizeMode="contain"
-                fadeDuration={0}
-              />
-              <View style={styles.wreathTextContainer}>
-                <Text style={styles.wreathNumber}>+1,000</Text>
-                <Text style={styles.wreathSubtext}>travelers have{'\n'}tried & loved{'\n'}this app</Text>
+          {/* Center content box */}
+          <View style={styles.wreathBadge}>
+            <View style={styles.wreathTextContainer}>
+              <Text style={styles.wreathMainText}>the #1 audio{'\n'}tour app</Text>
+              
+              {/* 5 Stars */}
+              <View style={styles.wreathStarsRow}>
+                {[...Array(5)].map((_, i) => (
+                  <Text key={i} style={styles.wreathStar}>⭐</Text>
+                ))}
               </View>
+              
+              {/* Emojis + Count */}
+              <Text style={styles.wreathEmojis}>
+                ✈️ 🗺️ 🎧 <Text style={styles.wreathCount}>+ 1,000 people</Text>
+              </Text>
             </View>
           </View>
+        </View>
+        
+        {/* Gradient Fade */}
+        <LinearGradient
+          colors={['rgba(255, 255, 255, 0)', 'rgba(240, 240, 240, 0.3)', 'rgba(240, 240, 240, 0.5)']}
+          style={styles.headerGradientFade}
+        />
+      </View>
 
-          {/* Reviews Carousel */}
-          <View style={styles.reviewsCarouselSection}>
-            <ScrollView 
-              ref={reviewsCarouselScrollRef}
-              horizontal 
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.reviewsCarouselContent}
-              decelerationRate="fast"
-              snapToInterval={Dimensions.get('window').width - 80 + 16}
-              snapToAlignment="start"
-              onMomentumScrollEnd={(event) => {
-                const cardWidth = Dimensions.get('window').width - 80 + 16;
-                const index = Math.round(event.nativeEvent.contentOffset.x / cardWidth);
-                setCurrentReviewIndex(index);
-              }}
-            >
-              {REVIEWS.map((review, index) => (
-                <View key={index} style={styles.reviewCarouselCard}>
-                  <View style={styles.reviewHeader}>
-                    <Image source={{ uri: review.avatar }} style={styles.reviewAvatar} />
-                    <View style={styles.reviewMeta}>
-                      <Text style={styles.reviewName}>{review.name}</Text>
-                      <View style={styles.starsContainer}>
-                        {[...Array(review.rating)].map((_, i) => (
-                          <Star key={i} size={14} color="#FFD700" fill="#FFD700" />
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.reviewText}>{review.text}</Text>
-                </View>
-              ))}
-            </ScrollView>
-            
-            {/* Carousel dots indicator */}
-            <View style={styles.carouselDotsContainer}>
-              {REVIEWS.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.carouselDot,
-                    currentReviewIndex === index && styles.carouselDotActive
-                  ]}
-                />
-              ))}
+      {/* Scrollable Reviews Section */}
+      <ScrollView 
+        style={styles.reviewsScrollContainer}
+        contentContainerStyle={styles.reviewsScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.reviewsStackSection}>
+          {REVIEWS.map((review, index) => (
+            <View key={index} style={styles.reviewStackCard}>
+              {/* Stars at top */}
+              <View style={styles.reviewStarsRow}>
+                {[...Array(review.rating)].map((_, i) => (
+                  <Text key={i} style={styles.reviewStar}>⭐</Text>
+                ))}
+              </View>
+              
+              {/* Title */}
+              <Text style={styles.reviewTitle}>{review.title}</Text>
+              
+              {/* Review text */}
+              <Text style={styles.reviewBodyText}>{review.text}</Text>
+              
+              {/* Name */}
+              <Text style={styles.reviewName}>{review.name}</Text>
             </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => transitionToStep("creating-plan")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryButtonText}>Almost There!</Text>
-          </TouchableOpacity>
+          ))}
         </View>
       </ScrollView>
+
+      {/* Fixed CTA Button */}
+      <View style={styles.ctaButtonContainer}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => {
+            triggerHapticFeedback();
+            transitionToStep("creating-plan");
+          }}
+          activeOpacity={0.8}
+        >
+            <Text style={styles.primaryButtonText}>See Your Custom Plan</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -2100,13 +2156,10 @@ export default function OnboardingScreen() {
           return;
         }
         
-        console.log(`[Final Slide] 📍 ${cityName} not in curated list - will need to geocode for API search`);
-        // We'll try to geocode the city name to get coordinates for API search
-        // For now, if we can't use curated, we'll show empty (could enhance later)
-        console.log('[Final Slide] 💭 Cannot search via API without coordinates - showing curated or empty');
-        setCityLandmarks([]);
-        setIsLoadingLocation(false);
-        return;
+        // City not in curated list - fallback to current location
+        console.log(`[Final Slide] 📍 ${cityName} not in curated list - falling back to current location`);
+        console.log('[Final Slide] 🔄 Switching to location-based landmark search...');
+        // Don't return - continue to location detection below
       }
       
       // Otherwise, use actual location
@@ -2509,7 +2562,10 @@ export default function OnboardingScreen() {
               
               <TouchableOpacity
                 style={styles.finalButton}
-                onPress={handleComplete}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  handleComplete();
+                }}
                 activeOpacity={0.8}
               >
                 <LinearGradient
@@ -2558,20 +2614,22 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {step !== "welcome" && renderProgressBar()}
-      <Animated.View
-        style={[
-          styles.animatedContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-      {renderCurrentSlide()}
-      </Animated.View>
-    </SafeAreaView>
+    <>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+        {step !== "welcome" && renderProgressBar()}
+        <Animated.View
+          style={[
+            styles.animatedContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+        {renderCurrentSlide()}
+        </Animated.View>
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -3408,55 +3466,97 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: BLUE,
   },
+  socialProofFixedHeader: {
+    backgroundColor: "#FFFFFF",
+    paddingBottom: 0,
+  },
+  headerGradientFade: {
+    height: 20,
+    width: "100%",
+  },
   socialProofHeadline: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
     color: "#1A1A1A",
     textAlign: "center",
-    lineHeight: 36,
-    marginTop: 20,
-    marginBottom: 16,
-    paddingHorizontal: 20,
+    lineHeight: 32,
+    marginTop: 16,
+    marginBottom: 6,
+    paddingHorizontal: 24,
+  },
+  socialProofHeadlineRegular: {
+    fontWeight: "700",
+    color: "#1A1A1A",
+  },
+  socialProofSubheadline: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#999999",
+    textAlign: "center",
+    marginBottom: 12,
+    paddingHorizontal: 24,
   },
   wreathBadgeContainer: {
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
-    marginTop: 0,
+    marginBottom: 8,
+    marginTop: -8,
     backgroundColor: "#FFFFFF",
-    overflow: "visible",
+    height: 180,
+  },
+  wreathLeftImageOuter: {
+    position: "absolute",
+    left: 20,
+    top: 0,
+    width: 90,
+    height: 180,
+    zIndex: 1,
+  },
+  wreathRightImageOuter: {
+    position: "absolute",
+    right: 20,
+    top: 0,
+    width: 90,
+    height: 180,
+    zIndex: 1,
   },
   wreathBadge: {
-    position: "relative",
-    width: 280,
-    height: 280,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  wreathImage: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
-    overflow: "visible",
+    zIndex: 5,
   },
   wreathTextContainer: {
-    position: "absolute",
     alignItems: "center",
     justifyContent: "center",
-    width: "100%",
-    height: "100%",
-    paddingBottom: 20,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    zIndex: 10,
   },
-  wreathNumber: {
-    fontSize: 48,
+  wreathMainText: {
+    fontSize: 20,
     fontWeight: "800",
     color: "#1A1A1A",
     textAlign: "center",
     marginBottom: 8,
-    textShadowColor: "rgba(0, 0, 0, 0.1)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    lineHeight: 26,
+  },
+  wreathStarsRow: {
+    flexDirection: "row",
+    marginBottom: 6,
+    gap: 2,
+  },
+  wreathStar: {
+    fontSize: 16,
+  },
+  wreathEmojis: {
+    fontSize: 16,
+    textAlign: "center",
+  },
+  wreathCount: {
+    fontSize: 14,
+    color: "#666666",
+    fontWeight: "400",
   },
   wreathSubtext: {
     fontSize: 14,
@@ -3465,40 +3565,59 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 19,
   },
-  reviewsCarouselSection: {
-    marginBottom: 20,
+  reviewsScrollContainer: {
+    flex: 1,
   },
-  reviewsCarouselContent: {
+  reviewsScrollContent: {
+    paddingBottom: 20,
+  },
+  reviewsStackSection: {
     paddingHorizontal: 24,
-    gap: 16,
+    paddingTop: 8,
+    gap: 12,
   },
-  reviewCarouselCard: {
+  ctaButtonContainer: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    width: Dimensions.get('window').width - 80,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+  },
+  reviewStackCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  carouselDotsContainer: {
+  reviewStarsRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 16,
-    gap: 8,
+    marginBottom: 8,
+    gap: 2,
   },
-  carouselDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#DDD",
+  reviewStar: {
+    fontSize: 16,
   },
-  carouselDotActive: {
-    backgroundColor: "#E8A84C",
-    width: 24,
+  reviewTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 6,
+  },
+  reviewBodyText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#333333",
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewName: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#666666",
   },
   reviewsTitle: {
     fontSize: 24,

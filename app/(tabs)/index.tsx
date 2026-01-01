@@ -48,6 +48,8 @@ import { Topic, AudioLength, TransportMethod, AudioGuide, SubscriptionTier } fro
 import { useTours } from "@/contexts/ToursContext";
 import { useUser } from "@/contexts/UserContext";
 import PaywallModal from "@/components/PaywallModal";
+import { triggerHapticFeedback } from "@/lib/haptics";
+import FeatureGuard from "@/components/FeatureGuard";
 
 import { splitIntoChunks, sanitizeTextForTTS } from "@/lib/text-sanitizer";
 
@@ -129,6 +131,7 @@ export default function ExploreScreen() {
   }, [rotateAnim1, rotateAnim2, rotateAnim3]);
 
   const goToNextStep = (step: FlowStep) => {
+    triggerHapticFeedback();
     if (step === "generating" || step === "landmarkTopicsLoading") {
       setFlowStep(step);
       fadeAnim.setValue(1);
@@ -203,6 +206,7 @@ export default function ExploreScreen() {
   };
 
   const handleTourTypeSelection = (type: "route" | "immersive" | "landmark") => {
+    triggerHapticFeedback();
     setTourType(type);
     if (type === "landmark") {
       goToNextStep("landmarkDiscovery");
@@ -212,6 +216,7 @@ export default function ExploreScreen() {
   };
 
   const toggleTopic = (topicId: Topic) => {
+    triggerHapticFeedback();
     setSelectedTopics((prev) =>
       prev.includes(topicId)
         ? prev.filter((t) => t !== topicId)
@@ -335,6 +340,7 @@ export default function ExploreScreen() {
   };
 
   const clearLocation = () => {
+    triggerHapticFeedback();
     setLocation("");
     setLocationCoords(null);
     setPlaceSuggestions([]);
@@ -788,6 +794,7 @@ For ${location}, return topics as JSON array:`;
   };
 
   const handleGenerate = async () => {
+    triggerHapticFeedback();
     if (!canGenerate || !tourType) {
       console.log("[Tour Generation] Cannot generate: missing requirements");
       return;
@@ -1683,7 +1690,10 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
                 audioLength === length.value && styles.lengthCardSelected,
               ]}
               activeOpacity={0.7}
-              onPress={() => setAudioLength(length.value)}
+              onPress={() => {
+                triggerHapticFeedback();
+                setAudioLength(length.value);
+              }}
             >
               <Clock
                 size={24}
@@ -1741,7 +1751,10 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
                   transportMethod === method.value && styles.simpleOptionCardSelected,
                 ]}
                 activeOpacity={0.7}
-                onPress={() => setTransportMethod(method.value)}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  setTransportMethod(method.value);
+                }}
               >
                 <Icon size={24} color={Colors.light.primary} style={styles.transportIcon} />
                 <View style={styles.simpleOptionContent}>
@@ -1792,7 +1805,10 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
                 travelTime === option.value && styles.lengthCardSelected,
               ]}
               activeOpacity={0.7}
-              onPress={() => setTravelTime(option.value)}
+              onPress={() => {
+                triggerHapticFeedback();
+                setTravelTime(option.value);
+              }}
             >
               <Clock
                 size={24}
@@ -1843,7 +1859,10 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
                 numStops === option.value && styles.lengthCardSelected,
               ]}
               activeOpacity={0.7}
-              onPress={() => setNumStops(option.value)}
+              onPress={() => {
+                triggerHapticFeedback();
+                setNumStops(option.value);
+              }}
             >
               <MapPin
                 size={24}
@@ -1897,7 +1916,10 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
                 timePerStop === option.value && styles.lengthCardSelected,
               ]}
               activeOpacity={0.7}
-              onPress={() => setTimePerStop(option.value)}
+              onPress={() => {
+                triggerHapticFeedback();
+                setTimePerStop(option.value);
+              }}
             >
               <Clock
                 size={24}
@@ -2126,7 +2148,8 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
   const showBackButton = flowStep !== "welcome" && flowStep !== "generating" && flowStep !== "landmarkTopicsLoading";
 
   return (
-    <LinearGradient
+    <FeatureGuard featureName="Tour Creator">
+      <LinearGradient
       colors={["#FAFBFC", "#F0F4F8"]}
       locations={[0, 1]}
       style={styles.container}
@@ -2175,6 +2198,7 @@ ${locationCoords ? `- listenerCoordinates: { latitude: ${locationCoords.latitude
         isProcessing={isProcessingSubscription}
       />
     </LinearGradient>
+    </FeatureGuard>
   );
 }
 

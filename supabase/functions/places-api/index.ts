@@ -25,21 +25,14 @@ serve(async (req) => {
     if (action === 'discoverLandmarks') {
       const { latitude, longitude, radius = 10000, type = 'touristic' } = params
 
-      // Define what types to fetch from Google Places
+      // Define what types to fetch from Google Places - ONLY historical & tourist attractions
       const typeMap: Record<string, string[]> = {
         touristic: [
           "tourist_attraction",
-          "museum",
-          "art_gallery",
           "historical_landmark",
-          "monument",
-          "cultural_center",
-          "performing_arts_theater",
-          "church",  // Includes historic churches like San Agustin
-          "park"     // Includes state parks, we'll filter small ones
         ],
-        restaurant: ["restaurant", "cafe", "bar"],
-        unique: ["art_gallery", "museum", "historical_landmark"],
+        restaurant: ["restaurant"],
+        unique: ["point_of_interest"],
       }
 
       const response = await fetch(
@@ -81,33 +74,42 @@ serve(async (req) => {
 
       console.log(`[Places API] Found ${places.length} places from Google Places API`)
 
-      // Smart filtering - keep tourist-worthy landmarks only
+      // Strict filtering - ONLY historical landmarks and tourist attractions
       const filteredPlaces = places.filter((place: any) => {
         const name = (place.displayName?.text || "").toLowerCase()
         const types = place.types || []
         
-        // Filter out commercial chains
-        const chains = ['walmart', 'target', 'mcdonald', 'burger king', 'subway', 'starbucks', 'cvs', 'walgreens']
-        if (chains.some(chain => name.includes(chain))) {
+        // Must be a tourist attraction OR historical landmark
+        const isTouristAttraction = types.includes('tourist_attraction')
+        const isHistoricalLandmark = types.includes('historical_landmark')
+        
+        if (!isTouristAttraction && !isHistoricalLandmark) {
           return false
         }
-
-        // For parks: only keep if it's a tourist attraction or significant park
+        
+        // Filter out commercial chains and stores
+        const commercialKeywords = [
+          'walmart', 'target', 'mcdonald', 'burger king', 'subway', 'starbucks', 
+          'cvs', 'walgreens', 'shop', 'mall', 'store', 'market', 'gas station',
+          'hotel', 'motel', 'inn', 'lodging'
+        ]
+        if (commercialKeywords.some(keyword => name.includes(keyword))) {
+          return false
+        }
+        
+        // Filter out generic parks unless they're historic/tourist destinations
         if (types.includes('park')) {
-          const isTouristPark = types.includes('tourist_attraction') || 
-                               name.includes('state park') || 
-                               name.includes('national park') ||
-                               name.includes('historic')
+          const isSignificantPark = name.includes('national park') || 
+                                   name.includes('state park') ||
+                                   name.includes('historic') ||
+                                   name.includes('memorial')
           
-          const isSmallPark = name.includes('soccer') || 
-                             name.includes('baseball') ||
-                             name.includes('basketball') ||
-                             name.includes('dog park') ||
-                             name.includes('skate') ||
-                             name.includes('playground') ||
-                             name.includes('community park')
+          const isGenericPark = name.includes('community park') ||
+                               name.includes('dog park') ||
+                               name.includes('playground') ||
+                               name.includes('sports')
           
-          if (!isTouristPark || isSmallPark) {
+          if (!isSignificantPark || isGenericPark) {
             return false
           }
         }
@@ -115,7 +117,7 @@ serve(async (req) => {
         return true
       })
 
-      console.log(`[Places API] After filtering: ${filteredPlaces.length} landmarks`)
+      console.log(`[Places API] After strict filtering: ${filteredPlaces.length} historical/tourist landmarks`)
 
       // Convert to app format
       const landmarks = filteredPlaces.map((place: any) => {
@@ -124,8 +126,15 @@ serve(async (req) => {
           ? `https://places.googleapis.com/v1/${photoReference}/media?maxHeightPx=800&maxWidthPx=800&key=${apiKey}`
           : "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"
 
+        // Better description focused on historical/tourist value
+        const types = place.types || []
+        let typeLabel = 'landmark'
+        if (types.includes('historical_landmark')) typeLabel = 'historical landmark'
+        if (types.includes('monument')) typeLabel = 'monument'
+        if (types.includes('museum')) typeLabel = 'museum'
+        
         const description = place.editorialSummary?.text || 
-          `Discover this ${place.types?.[0]?.replace(/_/g, ' ') || 'interesting'} location. ${place.rating ? `Rated ${place.rating.toFixed(1)}/5.0.` : ''}`
+          `Visit this ${typeLabel}. ${place.rating ? `Rated ${place.rating.toFixed(1)}/5.0.` : ''}`
 
         return {
           id: place.id,

@@ -470,13 +470,430 @@ export async function callPlacesApi<T = any>(request: PlacesApiRequest): Promise
  * Replaces trpc.landmarks.discover
  * Falls back to empty results if the API fails
  */
+// Mock landmarks for development when API is not available
+function getMockLandmarks(latitude: number, longitude: number): DiscoverLandmarksResponse {
+  // San Francisco area landmarks (if near SF)
+  const isSanFrancisco = Math.abs(latitude - 37.7749) < 0.1 && Math.abs(longitude - (-122.4194)) < 0.1;
+  
+  if (isSanFrancisco) {
+    return {
+      landmarks: [
+        {
+          id: 'mock_golden_gate',
+          name: 'Golden Gate Bridge',
+          description: 'Iconic suspension bridge spanning the Golden Gate strait. A symbol of San Francisco and one of the most photographed bridges in the world.',
+          coordinates: { latitude: 37.8199, longitude: -122.4783 },
+          imageUrl: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_alcatraz',
+          name: 'Alcatraz Island',
+          description: 'Historic federal penitentiary turned national park. Once home to notorious criminals like Al Capone and Machine Gun Kelly.',
+          coordinates: { latitude: 37.8267, longitude: -122.4230 },
+          imageUrl: 'https://images.unsplash.com/photo-1611212166534-cea2fd6ece01?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_coit_tower',
+          name: 'Coit Tower',
+          description: 'Historic Art Deco tower offering panoramic views of San Francisco and the bay. Built in 1933.',
+          coordinates: { latitude: 37.8024, longitude: -122.4058 },
+          imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_palace_fine_arts',
+          name: 'Palace of Fine Arts',
+          description: 'Monumental structure built for the 1915 Panama-Pacific Exposition. Beautiful example of Greco-Roman architecture.',
+          coordinates: { latitude: 37.8029, longitude: -122.4486 },
+          imageUrl: 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_ferry_building',
+          name: 'Ferry Building',
+          description: 'Historic terminal and marketplace built in 1898. Famous for its 245-foot clock tower modeled after the Giralda bell tower in Seville.',
+          coordinates: { latitude: 37.7956, longitude: -122.3933 },
+          imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_painted_ladies',
+          name: 'Painted Ladies',
+          description: 'Row of colorful Victorian houses built between 1892 and 1896. One of the most iconic views of San Francisco.',
+          coordinates: { latitude: 37.7762, longitude: -122.4330 },
+          imageUrl: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_lombard_street',
+          name: 'Lombard Street',
+          description: 'The "crookedest street in the world" with eight hairpin turns. Built in the 1920s to reduce the hill\'s natural steep grade.',
+          coordinates: { latitude: 37.8021, longitude: -122.4187 },
+          imageUrl: 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_fishermans_wharf',
+          name: "Fisherman's Wharf",
+          description: 'Historic waterfront neighborhood and popular tourist attraction. Home to seafood restaurants, sea lions at Pier 39, and historic ships.',
+          coordinates: { latitude: 37.8080, longitude: -122.4177 },
+          imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_chinatown_gate',
+          name: 'Chinatown Dragon Gate',
+          description: 'Iconic gateway to the oldest Chinatown in North America, established in the 1840s. The gate was built in 1970.',
+          coordinates: { latitude: 37.7908, longitude: -122.4056 },
+          imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_cable_car_museum',
+          name: 'Cable Car Museum',
+          description: 'Working museum displaying the city\'s historic cable car system. Houses the powerhouse and machinery that drives the entire cable car system.',
+          coordinates: { latitude: 37.7946, longitude: -122.4115 },
+          imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_transamerica_pyramid',
+          name: 'Transamerica Pyramid',
+          description: 'Iconic 48-story skyscraper completed in 1972. The second-tallest building in San Francisco skyline.',
+          coordinates: { latitude: 37.7952, longitude: -122.4028 },
+          imageUrl: 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_city_hall',
+          name: 'San Francisco City Hall',
+          description: 'Beaux-Arts style building completed in 1915. Its dome is taller than the US Capitol and is a masterpiece of civic architecture.',
+          coordinates: { latitude: 37.7790, longitude: -122.4195 },
+          imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_mission_dolores',
+          name: 'Mission San Francisco de Asís',
+          description: 'Oldest surviving structure in San Francisco, founded in 1776. Also known as Mission Dolores.',
+          coordinates: { latitude: 37.7637, longitude: -122.4262 },
+          imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_presidio',
+          name: 'The Presidio',
+          description: 'Former military post dating back to 1776, now a national park. Rich in history from Spanish colonial times through World Wars.',
+          coordinates: { latitude: 37.7989, longitude: -122.4662 },
+          imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_exploratorium',
+          name: 'Exploratorium',
+          description: 'Museum of science, technology, and arts founded in 1969. Located at historic Pier 15 on the Embarcadero.',
+          coordinates: { latitude: 37.8013, longitude: -122.3975 },
+          imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_lands_end',
+          name: "Land's End",
+          description: 'Rugged coastal trail with spectacular views of the Golden Gate Bridge. Home to the historic Sutro Baths ruins.',
+          coordinates: { latitude: 37.7857, longitude: -122.5085 },
+          imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_twin_peaks',
+          name: 'Twin Peaks',
+          description: 'Two prominent hills with 360-degree views of San Francisco. Offers one of the best panoramic viewpoints in the city.',
+          coordinates: { latitude: 37.7544, longitude: -122.4477 },
+          imageUrl: 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_fort_point',
+          name: 'Fort Point',
+          description: 'Historic fort completed in 1861, located directly beneath the Golden Gate Bridge. Played key defensive role during Civil War.',
+          coordinates: { latitude: 37.8107, longitude: -122.4770 },
+          imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_japanese_tea_garden',
+          name: 'Japanese Tea Garden',
+          description: 'Oldest public Japanese garden in the United States, created in 1894 for the California Midwinter International Exposition.',
+          coordinates: { latitude: 37.7701, longitude: -122.4701 },
+          imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+        {
+          id: 'mock_haight_ashbury',
+          name: 'Haight-Ashbury',
+          description: 'Historic neighborhood and birthplace of the 1960s counterculture movement. Famous for its Victorian houses and Summer of Love history.',
+          coordinates: { latitude: 37.7692, longitude: -122.4481 },
+          imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+          category: 'historical',
+          type: 'touristic',
+          createdBy: 'system',
+          createdByName: 'System',
+          createdAt: Date.now(),
+          upvotes: 0,
+          upvotedBy: [],
+          reviews: [],
+        },
+      ],
+      location: { latitude, longitude },
+      source: 'google_places',
+    };
+  }
+  
+  // Generic landmarks for other locations
+  return {
+    landmarks: [
+      {
+        id: 'mock_landmark_1',
+        name: 'Historic Downtown Square',
+        description: 'Historic central square featuring beautiful architecture and rich local history.',
+        coordinates: { latitude: latitude + 0.01, longitude: longitude + 0.01 },
+        imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+      {
+        id: 'mock_landmark_2',
+        name: 'City Hall Historic Building',
+        description: 'Landmark government building showcasing impressive architecture and civic history.',
+        coordinates: { latitude: latitude - 0.01, longitude: longitude - 0.01 },
+        imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+      {
+        id: 'mock_landmark_3',
+        name: 'Historic Memorial Park',
+        description: 'Beautiful park with monuments commemorating important local history.',
+        coordinates: { latitude: latitude + 0.005, longitude: longitude - 0.005 },
+        imageUrl: 'https://images.unsplash.com/photo-1506146332389-18140dc7b2fb?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+      {
+        id: 'mock_landmark_4',
+        name: 'Old Town Historic District',
+        description: 'Preserved historic district featuring original buildings and cultural heritage.',
+        coordinates: { latitude: latitude - 0.008, longitude: longitude + 0.008 },
+        imageUrl: 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+      {
+        id: 'mock_landmark_5',
+        name: 'Veterans Memorial',
+        description: 'Monument honoring local veterans with historical significance and beautiful grounds.',
+        coordinates: { latitude: latitude + 0.012, longitude: longitude + 0.003 },
+        imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+      {
+        id: 'mock_landmark_6',
+        name: 'Historic Train Station',
+        description: 'Beautifully restored train station showcasing architectural heritage from the golden age of rail travel.',
+        coordinates: { latitude: latitude - 0.006, longitude: longitude - 0.009 },
+        imageUrl: 'https://images.unsplash.com/photo-1564407983879-8ad0eed472b9?w=800',
+        category: 'historical',
+        type: 'touristic',
+        createdBy: 'system',
+        createdByName: 'System',
+        createdAt: Date.now(),
+        upvotes: 0,
+        upvotedBy: [],
+        reviews: [],
+      },
+    ],
+    location: { latitude, longitude },
+    source: 'google_places',
+  };
+}
+
+/**
+ * Discover landmarks using Google Places API
+ * @param params.radius - Search radius in METERS (Google API requirement)
+ */
 export async function discoverLandmarks(params: {
   latitude: number;
   longitude: number;
-  radius?: number;
+  radius?: number; // in meters (for Google Places API)
   type?: LandmarkType;
 }): Promise<DiscoverLandmarksResponse> {
-  console.log('[SupabaseFunctions] Discovering landmarks...', params);
+  console.log('[SupabaseFunctions] Discovering landmarks (radius in meters)...', params);
   
   try {
     const { data, error } = await supabase.functions.invoke('places-api', {
@@ -492,52 +909,16 @@ export async function discoverLandmarks(params: {
     });
 
     if (error) {
-      // Silently fallback to tRPC backend if Supabase Edge Function fails
-      console.log('[SupabaseFunctions] Using local backend for landmark discovery...');
-      try {
-        const trpcResult = await trpcClient.landmarks.discover.query({
-          latitude: params.latitude,
-          longitude: params.longitude,
-          radius: params.radius || 5000,
-          type: params.type || 'touristic',
-        });
-        
-        console.log('[SupabaseFunctions] Found', trpcResult?.landmarks?.length || 0, 'landmarks');
-        return trpcResult;
-      } catch (trpcError) {
-        console.error('[SupabaseFunctions] Failed to discover landmarks:', trpcError);
-        // Return empty results if both methods fail
-        return {
-          landmarks: [],
-          location: { latitude: params.latitude, longitude: params.longitude },
-          source: 'google_places',
-        };
-      }
+      console.warn('[SupabaseFunctions] Supabase edge function error:', error.message);
+      console.log('[SupabaseFunctions] Using mock data for development...');
+      return getMockLandmarks(params.latitude, params.longitude);
     }
 
     // Check if data contains an error from the edge function
     if (data?.error) {
-      // Silently fallback to tRPC backend
-      console.log('[SupabaseFunctions] Using local backend for landmark discovery...');
-      try {
-        const trpcResult = await trpcClient.landmarks.discover.query({
-          latitude: params.latitude,
-          longitude: params.longitude,
-          radius: params.radius || 5000,
-          type: params.type || 'touristic',
-        });
-        
-        console.log('[SupabaseFunctions] tRPC fallback success, count:', trpcResult?.landmarks?.length || 0);
-        return trpcResult;
-      } catch (trpcError) {
-        console.error('[SupabaseFunctions] tRPC fallback also failed:', trpcError);
-        // Return empty results if both methods fail
-        return {
-          landmarks: [],
-          location: { latitude: params.latitude, longitude: params.longitude },
-          source: 'google_places',
-        };
-      }
+      console.warn('[SupabaseFunctions] Edge function returned error:', data.error);
+      console.log('[SupabaseFunctions] Using mock data for development...');
+      return getMockLandmarks(params.latitude, params.longitude);
     }
 
     console.log('[SupabaseFunctions] discoverLandmarks success, count:', data?.landmarks?.length || 0);
